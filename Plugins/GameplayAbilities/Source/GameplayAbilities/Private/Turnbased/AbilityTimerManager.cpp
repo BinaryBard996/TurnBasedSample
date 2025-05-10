@@ -176,6 +176,19 @@ void FAbilityTimerManager::SetAbilityTimerForNextTick(FTimerDelegate const& InDe
 	}
 }
 
+void FAbilityTimerManager::ClearAbilityTimerContainer(UAbilitySystemComponent* AbilitySystemComponent)
+{
+	if(FAbilityTimerContainer* AbilityTimerContainer = AbilityTimerContainers.Find(AbilitySystemComponent))
+	{
+		for(auto& TimerHandle: AbilityTimerContainer->TimerHandles)
+		{
+			ClearTimer(TimerHandle);
+		}
+	}
+
+	AbilityTimerContainers.Remove(AbilitySystemComponent);
+}
+
 void FAbilityTimerManager::ClearAllAbilityTimerContainers()
 {
 	for(auto& AbilityTimerContainer: AbilityTimerContainers)

@@ -3265,6 +3265,14 @@ const FMinimalReplicationTagCountMap& UAbilitySystemComponent::GetReplicatedLoos
 	return ReplicatedLooseTags;
 }
 
+// TurnBased Support
+void UAbilitySystemComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
+
+	UAbilitySystemGlobals::Get().GetAbilityTimerManager().ClearAbilityTimerContainer(this);
+}
+
 void UAbilitySystemComponent::TickTurn(int32 Delta)
 {
 	CurrentTurn += Delta;
@@ -3274,6 +3282,7 @@ void UAbilitySystemComponent::ResetTurn()
 {
 	CurrentTurn = 0;
 }
+// ~TurnBased Support
 
 PRAGMA_ENABLE_DEPRECATION_WARNINGS
 

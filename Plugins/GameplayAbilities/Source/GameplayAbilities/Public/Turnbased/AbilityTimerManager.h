@@ -25,6 +25,7 @@ public:
 	void SetAbilityTimer(UAbilitySystemComponent* AbilitySystemComponent, FTimerHandle& InOutHandle, FTimerDelegate const& InDelegate, float InRate, bool bInLoop, float InFirstDelay = -1.f);
 	void ClearAbilityTimer(UAbilitySystemComponent* AbilitySystemComponent, FTimerHandle& InHandle);
 	void SetAbilityTimerForNextTick(FTimerDelegate const& InDelegate);
+	void ClearAbilityTimerContainer(UAbilitySystemComponent* AbilitySystemComponent);
 	void ClearAllAbilityTimerContainers();
 	
 private:

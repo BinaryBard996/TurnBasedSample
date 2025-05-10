@@ -1999,6 +1999,10 @@ protected:
 
 	// TurnBased Support
 public:
+	// Component Interface
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	// ~Component Interface
+	
 	UFUNCTION(BlueprintPure, Category=TurnBased)
 	bool IsTurnBased() const { return bTurnBased; }
 
