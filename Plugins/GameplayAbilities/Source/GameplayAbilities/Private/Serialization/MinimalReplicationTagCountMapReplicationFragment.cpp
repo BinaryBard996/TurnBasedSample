@@ -2,7 +2,6 @@
 
 #include "Serialization/MinimalReplicationTagCountMapReplicationFragment.h"
 
-#if UE_WITH_IRIS
 
 #include "Engine/NetConnection.h"
 #include "Iris/ReplicationState/ReplicationStateDescriptor.h"
@@ -43,7 +42,18 @@ FMinimalReplicationTagCountMapReplicationFragment::FMinimalReplicationTagCountMa
 
 		SrcReplicationState = MakeUnique<FPropertyReplicationState>(InDescriptor);
 	}
-	
+
+#if WITH_PUSH_MODEL
+	if (EnumHasAnyFlags(InDescriptor->Traits, EReplicationStateTraits::HasPushBasedDirtiness))
+	{
+		Traits |= EReplicationFragmentTraits::HasPushBasedDirtiness;
+		if (EnumHasAnyFlags(InDescriptor->Traits, EReplicationStateTraits::HasFullPushBasedDirtiness))
+		{
+			Traits |= EReplicationFragmentTraits::HasFullPushBasedDirtiness;
+		}
+	}
+#endif
+		
 	if (EnumHasAnyFlags(InTraits, EReplicationFragmentTraits::CanReceive))
 	{
 		if (EnumHasAnyFlags(InDescriptor->Traits, EReplicationStateTraits::HasRepNotifies))
@@ -86,7 +96,11 @@ void FMinimalReplicationTagCountMapReplicationFragment::ApplyReplicatedState(FRe
 
 bool FMinimalReplicationTagCountMapReplicationFragment::PollReplicatedState(EReplicationFragmentPollFlags PollOption)
 {
-	if (EnumHasAnyFlags(PollOption, EReplicationFragmentPollFlags::PollAllState))
+	// We can early out if we are pushbased and not dirty for polling
+	const bool bPoll = EnumHasAnyFlags(PollOption, EReplicationFragmentPollFlags::PollAllState) ||
+	(EnumHasAnyFlags(PollOption, EReplicationFragmentPollFlags::PollDirtyState) && (!EnumHasAnyFlags(EReplicationFragmentTraits::HasPushBasedDirtiness, Traits) || SrcReplicationState->IsDirtyForPolling()));
+
+	if (bPoll)
 	{
 		const uint8* ExternalStateBuffer = reinterpret_cast<uint8*>(Owner) + ReplicationStateDescriptor->MemberProperties[0]->GetOffset_ForGC();
 		const FMinimalReplicationTagCountMap* ExternalSourceState = reinterpret_cast<const FMinimalReplicationTagCountMap*>(ExternalStateBuffer);
@@ -102,6 +116,11 @@ bool FMinimalReplicationTagCountMapReplicationFragment::PollReplicatedState(ERep
 	}
 
 	return SrcReplicationState->IsDirty(0);
+}
+
+void FMinimalReplicationTagCountMapReplicationFragment::CollectOwner(FReplicationStateOwnerCollector* Owners) const
+{
+	Owners->AddOwner(Owner);
 }
 
 void FMinimalReplicationTagCountMapReplicationFragment::CallRepNotifies(FReplicationStateApplyContext& Context)
@@ -151,4 +170,3 @@ void FMinimalReplicationTagCountMapReplicationFragment::CallRepNotify(FReplicati
 
 }
 
-#endif

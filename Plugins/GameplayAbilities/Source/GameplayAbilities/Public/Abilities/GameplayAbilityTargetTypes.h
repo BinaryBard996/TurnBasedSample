@@ -15,6 +15,8 @@
 
 #include "GameplayAbilityTargetTypes.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UGameplayAbility;
 class UGameplayEffect;
 class UMeshComponent;
@@ -39,6 +41,15 @@ namespace EGameplayTargetingConfirmation
 		CustomMulti,
 	};
 }
+
+/** 
+ * This type should be provided as the Deleter when creating a TSharedPtr<FGameplayAbilityTargetData> so that
+ * the Object's ScriptStruct data will be destructed correctly.
+ */
+struct FGameplayAbilityTargetDataDeleter
+{
+	UE_API void operator()(FGameplayAbilityTargetData* Object) const;
+};
 
 /**
  *	A generic structure for targeting data. We want generic functions to produce this data and other generic
@@ -66,20 +77,20 @@ namespace EGameplayTargetingConfirmation
  *		-AOE/aura type of targeting data blurs the line
  */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData
+struct FGameplayAbilityTargetData
 {
 	GENERATED_USTRUCT_BODY()
 
 	virtual ~FGameplayAbilityTargetData() { }
 
 	/** Applies a gameplay effect to each target represented */
-	TArray<FActiveGameplayEffectHandle> ApplyGameplayEffect(const UGameplayEffect* GameplayEffect, const FGameplayEffectContextHandle& InEffectContext, float Level, FPredictionKey PredictionKey = FPredictionKey());
+	UE_API TArray<FActiveGameplayEffectHandle> ApplyGameplayEffect(const UGameplayEffect* GameplayEffect, const FGameplayEffectContextHandle& InEffectContext, float Level, FPredictionKey PredictionKey = FPredictionKey());
 
 	/** Applies a previously created gameplay effect spec to each target represented */
-	virtual TArray<FActiveGameplayEffectHandle> ApplyGameplayEffectSpec(FGameplayEffectSpec& Spec, FPredictionKey PredictionKey = FPredictionKey());
+	UE_API virtual TArray<FActiveGameplayEffectHandle> ApplyGameplayEffectSpec(FGameplayEffectSpec& Spec, FPredictionKey PredictionKey = FPredictionKey());
 
 	/** Modifies the context and adds this target data to the target data handle stored within */
-	virtual void AddTargetDataToContext(FGameplayEffectContextHandle& Context, bool bIncludeActorArray) const;
+	UE_API virtual void AddTargetDataToContext(FGameplayEffectContextHandle& Context, bool bIncludeActorArray) const;
 
 	/** Returns all actors targeted, almost always overridden */
 	virtual TArray<TWeakObjectPtr<AActor>> GetActors() const
@@ -143,7 +154,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData
 	}
 
 	/** Returns a debug string representation */
-	virtual FString ToString() const;
+	UE_API virtual FString ToString() const;
 
 	/** See notes on delegate definition FOnTargetActorSwapped */
 	virtual bool ShouldCheckForTargetActorSwap() const
@@ -188,7 +199,7 @@ namespace EGameplayAbilityTargetingLocationType
 *		-Polymophism in TargetData structure
 */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilityTargetDataHandle
+struct FGameplayAbilityTargetDataHandle
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -224,7 +235,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetDataHandle
 	/** Returns true if there are any valid targets */
 	bool IsValid(int32 Index) const
 	{
-		return (Index < Data.Num() && Data[Index].IsValid());
+		return (Data.IsValidIndex(Index) && Data[Index].IsValid());
 	}
 
 	/** Returns data at index, or nullptr if invalid */
@@ -252,7 +263,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetDataHandle
 	}
 
 	/** Serialize for networking, handles polymorphism */
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	/** Comparison operator */
 	bool operator==(const FGameplayAbilityTargetDataHandle& Other) const
@@ -302,7 +313,7 @@ struct FGameplayAbilityTargetingLocationInfoFixLayout
 
 /** Structure that stores a location in one of several different formats */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilityTargetingLocationInfo
+struct FGameplayAbilityTargetingLocationInfo
 #if CPP
 	: public FGameplayAbilityTargetingLocationInfoFixLayout
 #endif
@@ -329,13 +340,13 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetingLocationInfo
 	}
 
 	/** Converts internal format into a literal world space transform */
-	FTransform GetTargetingTransform() const;
+	UE_API FTransform GetTargetingTransform() const;
 	/** Initializes new target data and fills in with hit results */
-	FGameplayAbilityTargetDataHandle MakeTargetDataHandleFromHitResult(TWeakObjectPtr<UGameplayAbility> Ability, const FHitResult& HitResult) const;
-	FGameplayAbilityTargetDataHandle MakeTargetDataHandleFromHitResults(TWeakObjectPtr<UGameplayAbility> Ability, const TArray<FHitResult>& HitResults) const;
+	UE_API FGameplayAbilityTargetDataHandle MakeTargetDataHandleFromHitResult(TWeakObjectPtr<UGameplayAbility> Ability, const FHitResult& HitResult) const;
+	UE_API FGameplayAbilityTargetDataHandle MakeTargetDataHandleFromHitResults(TWeakObjectPtr<UGameplayAbility> Ability, const TArray<FHitResult>& HitResults) const;
 
 	/** Initializes new actor list target data, and sets this as the origin */
-	FGameplayAbilityTargetDataHandle MakeTargetDataHandleFromActors(const TArray<TWeakObjectPtr<AActor>>& TargetActors, bool OneActorPerHandle = false) const;
+	UE_API FGameplayAbilityTargetDataHandle MakeTargetDataHandleFromActors(const TArray<TWeakObjectPtr<AActor>>& TargetActors, bool OneActorPerHandle = false) const;
 
 	/** A source actor is needed for Actor-based targeting, but not for Socket-based targeting. */
 	UPROPERTY(BlueprintReadWrite, meta = (ExposeOnSpawn = true), Category = Targeting)
@@ -362,7 +373,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetingLocationInfo
 	TEnumAsByte<EGameplayAbilityTargetingLocationType::Type> LocationType;
 
 	/** Optimized serialize function */
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 };
 
 template<>
@@ -376,7 +387,7 @@ struct TStructOpsTypeTraits<FGameplayAbilityTargetingLocationInfo> : public TStr
 
 /** Target data with just a source and target location in space */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData_LocationInfo : public FGameplayAbilityTargetData
+struct FGameplayAbilityTargetData_LocationInfo : public FGameplayAbilityTargetData
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -429,7 +440,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData_LocationInfo : public FG
 		return TEXT("FGameplayAbilityTargetData_LocationInfo");
 	}
 
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 };
 
 template<>
@@ -443,7 +454,7 @@ struct TStructOpsTypeTraits<FGameplayAbilityTargetData_LocationInfo> : public TS
 
 /** Target data with a source location and a list of targeted actors, makes sense for AOE attacks */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData_ActorArray : public FGameplayAbilityTargetData
+struct FGameplayAbilityTargetData_ActorArray : public FGameplayAbilityTargetData
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -532,7 +543,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData_ActorArray : public FGam
 		return TEXT("FGameplayAbilityTargetData_ActorArray");
 	}
 
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 };
 
 template<>
@@ -546,7 +557,7 @@ struct TStructOpsTypeTraits<FGameplayAbilityTargetData_ActorArray> : public TStr
 
 /** Target data with a single hit result, data is packed into the hit result */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData_SingleTargetHit : public FGameplayAbilityTargetData
+struct FGameplayAbilityTargetData_SingleTargetHit : public FGameplayAbilityTargetData
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -623,7 +634,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityTargetData_SingleTargetHit : public
 	UPROPERTY(NotReplicated)
 	bool bHitReplaced = false;
 
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	virtual UScriptStruct* GetScriptStruct() const override
 	{
@@ -689,3 +700,5 @@ struct FAbilityReplicatedData
 	/** Delegate that will be called on replication */
 	FSimpleMulticastDelegate Delegate;
 };
+
+#undef UE_API

@@ -279,8 +279,18 @@ bool UGameplayCueSet::HandleGameplayCueNotify_Internal(AActor* TargetActor, int3
 		// If object is not loaded yet
 		if (CueData.LoadedGameplayCueClass == nullptr || bDebugFailLoads)
 		{
-			// See if the object is loaded but just not hooked up here
-			CueData.LoadedGameplayCueClass = Cast<UClass>(CueData.GameplayCueNotifyObj.ResolveObject());
+			// See if the object is loaded but just not hooked up here. Only do this just-in-time
+			// detection of GCN class when the CueManager isn't waiting for an async load of the
+			// class. Otherwise, defer to CueManager->HandleMissingGameplayCue so that it can queue 
+			// events and execute them in order on async load completion. This addresses a race 
+			// condition where a UClass is resolvable but the async load callback hasn't fired yet 
+			// since those are deferred to the next frame. Previously this resulted in cues being
+			// executed out of order (remove before add).
+			if (!CueManager->IsAsyncLoadingGameplayCueNotifyClass(CueData.GameplayCueNotifyObj))
+			{
+				CueData.LoadedGameplayCueClass = Cast<UClass>(CueData.GameplayCueNotifyObj.ResolveObject());
+			}
+
 			if (CueData.LoadedGameplayCueClass == nullptr || bDebugFailLoads)
 			{
 				if (!CueManager->HandleMissingGameplayCue(this, CueData, TargetActor, EventType, Parameters))
@@ -293,7 +303,7 @@ bool UGameplayCueSet::HandleGameplayCueNotify_Internal(AActor* TargetActor, int3
 		check(CueData.LoadedGameplayCueClass);
 
 		// Handle the Notify if we found something
-		if (UGameplayCueNotify_Static* NonInstancedCue = Cast<UGameplayCueNotify_Static>(CueData.LoadedGameplayCueClass->ClassDefaultObject))
+		if (UGameplayCueNotify_Static* NonInstancedCue = Cast<UGameplayCueNotify_Static>(CueData.LoadedGameplayCueClass->GetDefaultObject(false)))
 		{
 			if (NonInstancedCue->HandlesEvent(EventType))
 			{
@@ -310,7 +320,7 @@ bool UGameplayCueSet::HandleGameplayCueNotify_Internal(AActor* TargetActor, int3
 				HandleGameplayCueNotify_Internal(TargetActor, CueData.ParentDataIdx, EventType, Parameters);
 			}
 		}
-		else if (AGameplayCueNotify_Actor* InstancedCue = Cast<AGameplayCueNotify_Actor>(CueData.LoadedGameplayCueClass->ClassDefaultObject))
+		else if (AGameplayCueNotify_Actor* InstancedCue = Cast<AGameplayCueNotify_Actor>(CueData.LoadedGameplayCueClass->GetDefaultObject(false)))
 		{
 			bool bShouldDestroy = false;
 			if (EventType == EGameplayCueEvent::Executed && !Parameters.bGameplayEffectActive && InstancedCue->bAutoDestroyOnRemove)

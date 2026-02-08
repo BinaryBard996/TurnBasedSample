@@ -91,6 +91,11 @@ bool FGameplayAbilityRepAnimMontage::NetSerialize(FArchive& Ar, class UPackageMa
 		Ar << SlotName;
 	}
 
+	if (Ar.EngineNetVer() >= FEngineNetworkCustomVersion::MontagePlayCountSerialization)
+	{
+		Ar << PlayCount;
+	}
+
 	bOutSuccess = true;
 	return true;
 }

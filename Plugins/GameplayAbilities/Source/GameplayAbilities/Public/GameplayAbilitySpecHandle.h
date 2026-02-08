@@ -6,7 +6,7 @@
 
 
 /**
- *	This file exists in addition so that GameplayEffect.h can use FGameplayAbilitySpec without having to include GameplayAbilityTypes.h which has depancies on
+ *	This file exists in addition so that GameplayEffect.h can use FGameplayAbilitySpec without having to include GameplayAbilityTypes.h which has dependencies on
  *	GameplayEffect.h
  */
 

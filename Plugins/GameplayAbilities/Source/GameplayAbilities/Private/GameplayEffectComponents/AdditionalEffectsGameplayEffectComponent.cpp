@@ -5,6 +5,8 @@
 #include "AbilitySystemLog.h"
 #include "Misc/DataValidation.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AdditionalEffectsGameplayEffectComponent)
+
 #define LOCTEXT_NAMESPACE "AdditionalEffectsGameplayEffectComponent"
 
 bool UAdditionalEffectsGameplayEffectComponent::OnActiveGameplayEffectAdded(FActiveGameplayEffectsContainer& ActiveGEContainer, FActiveGameplayEffect& ActiveGE) const

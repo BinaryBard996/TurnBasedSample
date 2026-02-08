@@ -6,7 +6,6 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(MinimalReplicationTagCountNetSerializer)
 
-#if UE_WITH_IRIS
 
 #include "GameplayEffectTypes.h"
 #include "Iris/Serialization/NetSerializerDelegates.h"
@@ -251,7 +250,11 @@ void FMinimalReplicationTagCountMapNetSerializer::FNetSerializerRegistryDelegate
 
 void FMinimalReplicationTagCountMapNetSerializer::FNetSerializerRegistryDelegates::OnPostFreezeNetSerializerRegistry()
 {
-	constexpr SIZE_T ExpectedSizeOfFMinimalReplicationTagCountMap = 104;
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+	constexpr SIZE_T ExpectedSizeOfFMinimalReplicationTagCountMap = 32 + sizeof(TMap<FGameplayTag, int32>);
+#else
+	constexpr SIZE_T ExpectedSizeOfFMinimalReplicationTagCountMap = 24 + sizeof(TMap<FGameplayTag, int32>);
+#endif
 	constexpr SIZE_T ExpectedAlignOfFMinimalReplicationTagCountMap = 8;
 
 	constexpr SIZE_T ActualSizeOfFMinimalReplicationTagCountMap = sizeof(FMinimalReplicationTagCountMap);
@@ -278,4 +281,3 @@ void FMinimalReplicationTagCountMapNetSerializer::FNetSerializerRegistryDelegate
 
 }
 
-#endif

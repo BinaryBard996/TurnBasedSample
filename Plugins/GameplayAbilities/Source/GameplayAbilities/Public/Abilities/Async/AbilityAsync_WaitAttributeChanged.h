@@ -7,10 +7,12 @@
 #include "Abilities/GameplayAbilityTypes.h"
 #include "AbilityAsync_WaitAttributeChanged.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityAsync_WaitAttributeChanged : public UAbilityAsync
+UCLASS(MinimalAPI)
+class UAbilityAsync_WaitAttributeChanged : public UAbilityAsync
 {
 	GENERATED_BODY()
 
@@ -22,7 +24,7 @@ public:
 	 * If used in an ability graph, this async action will wait even after activation ends. It's recommended to use WaitForAttributeChange instead.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (DefaultToSelf = "TargetActor", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityAsync_WaitAttributeChanged* WaitForAttributeChanged(AActor* TargetActor, FGameplayAttribute Attribute, bool OnlyTriggerOnce = false);
+	static UE_API UAbilityAsync_WaitAttributeChanged* WaitForAttributeChanged(AActor* TargetActor, FGameplayAttribute Attribute, bool OnlyTriggerOnce = false);
 
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FAsyncWaitAttributeChangedDelegate, FGameplayAttribute, Attribute, float, NewValue, float, OldValue);
 	UPROPERTY(BlueprintAssignable)
@@ -30,13 +32,15 @@ public:
 
 protected:
 
-	virtual void Activate() override;
-	virtual void EndAction() override;
+	UE_API virtual void Activate() override;
+	UE_API virtual void EndAction() override;
 
-	void OnAttributeChanged(const FOnAttributeChangeData& ChangeData);
+	UE_API void OnAttributeChanged(const FOnAttributeChangeData& ChangeData);
 
 	FGameplayAttribute Attribute;
 	bool OnlyTriggerOnce = false;
 
 	FDelegateHandle MyHandle;
 };
+
+#undef UE_API

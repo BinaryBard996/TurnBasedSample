@@ -6,7 +6,9 @@
 #include "Modules/ModuleInterface.h"
 #include "Modules/ModuleManager.h"
 
-struct GAMEPLAYABILITIESEDITOR_API FGameplayCueEditorStrings
+#define UE_API GAMEPLAYABILITIESEDITOR_API
+
+struct FGameplayCueEditorStrings
 {
 	FString GameplayCueNotifyDescription1;
 	FString GameplayCueNotifyDescription2;
@@ -79,3 +81,5 @@ public:
 	virtual FGetGameplayCueEditorStrings& GetGameplayCueEditorStringsDelegate() = 0;
 	
 };
+
+#undef UE_API

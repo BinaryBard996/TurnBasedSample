@@ -9,6 +9,8 @@
 #include "Abilities/GameplayAbility.h"
 #include "GameplayAbilitySet.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
 /**
@@ -57,8 +59,8 @@ struct FGameplayAbilityBindInfo
  *	
  *	
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UGameplayAbilitySet : public UDataAsset
+UCLASS(MinimalAPI)
+class UGameplayAbilitySet : public UDataAsset
 {
 	GENERATED_UCLASS_BODY()
 
@@ -66,5 +68,7 @@ class GAMEPLAYABILITIES_API UGameplayAbilitySet : public UDataAsset
 	UPROPERTY(EditAnywhere, Category = AbilitySet)
 	TArray<FGameplayAbilityBindInfo>	Abilities;
 
-	void GiveAbilities(UAbilitySystemComponent* AbilitySystemComponent) const;
+	UE_API void GiveAbilities(UAbilitySystemComponent* AbilitySystemComponent) const;
 };
+
+#undef UE_API

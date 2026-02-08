@@ -12,24 +12,28 @@ UAbilityTask_WaitGameplayEffectApplied_Self::UAbilityTask_WaitGameplayEffectAppl
 {
 }
 
-UAbilityTask_WaitGameplayEffectApplied_Self* UAbilityTask_WaitGameplayEffectApplied_Self::WaitGameplayEffectAppliedToSelf(UGameplayAbility* OwningAbility, const FGameplayTargetDataFilterHandle InFilter, FGameplayTagRequirements InSourceTagRequirements, FGameplayTagRequirements InTargetTagRequirements, bool InTriggerOnce, AActor* OptionalExternalOwner, bool InListenForPeriodicEffect)
+UAbilityTask_WaitGameplayEffectApplied_Self* UAbilityTask_WaitGameplayEffectApplied_Self::WaitGameplayEffectAppliedToSelf(UGameplayAbility* OwningAbility, const FGameplayTargetDataFilterHandle InFilter, FGameplayTagRequirements InSourceTagRequirements, FGameplayTagRequirements InTargetTagRequirements, FGameplayTagRequirements InAssetTagRequirements, FGameplayTagRequirements InGrantedTagRequirements, bool InTriggerOnce, AActor* OptionalExternalOwner, bool InListenForPeriodicEffect)
 {
 	UAbilityTask_WaitGameplayEffectApplied_Self* MyObj = NewAbilityTask<UAbilityTask_WaitGameplayEffectApplied_Self>(OwningAbility);
 	MyObj->Filter = InFilter;
 	MyObj->SourceTagRequirements = InSourceTagRequirements;
 	MyObj->TargetTagRequirements = InTargetTagRequirements;
+	MyObj->AssetTagRequirements = InAssetTagRequirements;
+	MyObj->GrantedTagRequirements = InGrantedTagRequirements;
 	MyObj->TriggerOnce = InTriggerOnce;
 	MyObj->SetExternalActor(OptionalExternalOwner);
 	MyObj->ListenForPeriodicEffects = InListenForPeriodicEffect;
 	return MyObj;
 }
 
-UAbilityTask_WaitGameplayEffectApplied_Self* UAbilityTask_WaitGameplayEffectApplied_Self::WaitGameplayEffectAppliedToSelf_Query(UGameplayAbility* OwningAbility, const FGameplayTargetDataFilterHandle InFilter, FGameplayTagQuery InSourceTagQuery, FGameplayTagQuery InTargetTagQuery, bool InTriggerOnce, AActor* OptionalExternalOwner, bool InListenForPeriodicEffect)
+UAbilityTask_WaitGameplayEffectApplied_Self* UAbilityTask_WaitGameplayEffectApplied_Self::WaitGameplayEffectAppliedToSelf_Query(UGameplayAbility* OwningAbility, const FGameplayTargetDataFilterHandle InFilter, FGameplayTagQuery InSourceTagQuery, FGameplayTagQuery InTargetTagQuery, FGameplayTagQuery InAssetTagQuery, FGameplayTagQuery InGrantedTagQuery, bool InTriggerOnce, AActor* OptionalExternalOwner, bool InListenForPeriodicEffect)
 {
 	UAbilityTask_WaitGameplayEffectApplied_Self* MyObj = NewAbilityTask<UAbilityTask_WaitGameplayEffectApplied_Self>(OwningAbility);
 	MyObj->Filter = InFilter;
 	MyObj->SourceTagQuery = InSourceTagQuery;
 	MyObj->TargetTagQuery = InTargetTagQuery;
+	MyObj->AssetTagQuery = InAssetTagQuery;
+	MyObj->GrantedTagQuery = InGrantedTagQuery;
 	MyObj->TriggerOnce = InTriggerOnce;
 	MyObj->SetExternalActor(OptionalExternalOwner);
 	MyObj->ListenForPeriodicEffects = InListenForPeriodicEffect;

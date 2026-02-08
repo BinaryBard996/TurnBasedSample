@@ -12,6 +12,8 @@
 #include "Turnbased/AbilityTimerManager.h"
 #include "AbilitySystemGlobals.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 class UGameplayCueManager;
 class UGameplayTagReponseTable;
@@ -31,17 +33,29 @@ struct FNetSerializeScriptStructCache
 
 	void InitForType(UScriptStruct* InScriptStruct);
 
+	void SetInitDirty()
+	{
+		bIsInitDirty = true;
+	}
+
+	void RemoveInPackages(TConstArrayView<UPackage*>);
+
 	// Serializes reference to given script struct (must be in the cache)
 	bool NetSerialize(FArchive& Ar, UScriptStruct*& Struct);
 
 	UPROPERTY()
 	TArray<TObjectPtr<UScriptStruct>> ScriptStructs;
+
+	UPROPERTY()
+	TObjectPtr<UScriptStruct> BaseStructType;
+
+	bool bIsInitDirty = false;
 };
 
 
 /** Holds global data for the ability system. Configuration is done via the Developer Settings, Project -> Gameplay Abilities Settings  */
-UCLASS(config = Game)
-class GAMEPLAYABILITIES_API UAbilitySystemGlobals : public UObject
+UCLASS(config = Game, MinimalAPI)
+class UAbilitySystemGlobals : public UObject
 {
 	friend class UGameplayAbilitiesDeveloperSettings;
 
@@ -53,34 +67,34 @@ class GAMEPLAYABILITIES_API UAbilitySystemGlobals : public UObject
 		return *IGameplayAbilitiesModule::Get().GetAbilitySystemGlobals();
 	}
 	/** Will be called once on first use to load global data tables and tags (see FGameplayAbilitiesModule::GetAbilitySystemGlobals) */
-	virtual void InitGlobalData();
+	UE_API virtual void InitGlobalData();
 
 	/** Returns true if InitGlobalData has been called */
-	bool IsAbilitySystemGlobalsInitialized() const;
+	UE_API bool IsAbilitySystemGlobalsInitialized() const;
 	
 	// Returns true if we should use debug target from the HUD
-	bool ShouldUseDebugTargetFromHud();
+	UE_API bool ShouldUseDebugTargetFromHud();
 	
 	/** Returns the globally registered curve table */
-	UCurveTable* GetGlobalCurveTable();
+	UE_API UCurveTable* GetGlobalCurveTable();
 
 	/** Returns the data table defining attribute metadata (NOTE: Currently not in use) */
-	UDataTable* GetGlobalAttributeMetaDataTable();
+	UE_API UDataTable* GetGlobalAttributeMetaDataTable();
 
 	/** Returns data used to initialize attributes to their default values */
-	FAttributeSetInitter* GetAttributeSetInitter() const;
+	UE_API FAttributeSetInitter* GetAttributeSetInitter() const;
 
 	/** Searches the passed in actor for an ability system component, will use IAbilitySystemInterface or fall back to a component search */
-	static UAbilitySystemComponent* GetAbilitySystemComponentFromActor(const AActor* Actor, bool LookForComponent=true);
+	static UE_API UAbilitySystemComponent* GetAbilitySystemComponentFromActor(const AActor* Actor, bool LookForComponent=true);
 
 	/** Should allocate a project specific AbilityActorInfo struct. Caller is responsible for deallocation */
-	virtual FGameplayAbilityActorInfo* AllocAbilityActorInfo() const;
+	UE_API virtual FGameplayAbilityActorInfo* AllocAbilityActorInfo() const;
 
 	/** Should allocate a project specific GameplayEffectContext struct. Caller is responsible for deallocation */
-	virtual FGameplayEffectContext* AllocGameplayEffectContext() const;
+	UE_API virtual FGameplayEffectContext* AllocGameplayEffectContext() const;
 
 	/** Global callback that can handle game-specific code that needs to run before applying a gameplay effect spec */
-	virtual void GlobalPreGameplayEffectSpecApply(FGameplayEffectSpec& Spec, UAbilitySystemComponent* AbilitySystemComponent);
+	UE_API virtual void GlobalPreGameplayEffectSpecApply(FGameplayEffectSpec& Spec, UAbilitySystemComponent* AbilitySystemComponent);
 
 	/** Override to handle global state when gameplay effects are being applied */
 	virtual void PushCurrentAppliedGE(const FGameplayEffectSpec* Spec, UAbilitySystemComponent* AbilitySystemComponent) { }
@@ -88,22 +102,22 @@ class GAMEPLAYABILITIES_API UAbilitySystemGlobals : public UObject
 	virtual void PopCurrentAppliedGE() { }
 
 	/** Returns true if the ability system should try to predict gameplay effects applied to non local targets */
-	bool ShouldPredictTargetGameplayEffects() const;
+	UE_API bool ShouldPredictTargetGameplayEffects() const;
 
 	/** Returns true if tags granted to owners from ability activations should be replicated */
-	bool ShouldReplicateActivationOwnedTags() const;
+	UE_API bool ShouldReplicateActivationOwnedTags() const;
 
 	/** Searches the passed in class to look for a UFunction implementing the gameplay cue tag, sets MatchedTag to the exact tag found */
-	UFunction* GetGameplayCueFunction(const FGameplayTag &Tag, UClass* Class, FName &MatchedTag);
+	UE_API UFunction* GetGameplayCueFunction(const FGameplayTag &Tag, UClass* Class, FName &MatchedTag);
 
 	/** Returns the gameplay cue manager singleton object, creating if necessary */
-	virtual UGameplayCueManager* GetGameplayCueManager();
+	UE_API virtual UGameplayCueManager* GetGameplayCueManager();
 
 	/** Returns the gameplay tag response object, creating if necessary */
-	UGameplayTagReponseTable* GetGameplayTagResponseTable();
+	UE_API UGameplayTagReponseTable* GetGameplayTagResponseTable();
 
 	/** Sets a default gameplay cue tag using the asset's name. Returns true if it changed the tag. */
-	static bool DeriveGameplayCueTagFromAssetName(FString AssetName, FGameplayTag& GameplayCueTag, FName& GameplayCueName);
+	static UE_API bool DeriveGameplayCueTagFromAssetName(FString AssetName, FGameplayTag& GameplayCueTag, FName& GameplayCueName);
 
 	/** Sets a default gameplay cue tag using the asset's class*/
 	template<class T>
@@ -157,10 +171,10 @@ class GAMEPLAYABILITIES_API UAbilitySystemGlobals : public UObject
 	virtual void ToggleIgnoreAbilitySystemCosts() {}
 
 	/** Returns true if ability cooldowns are ignored, returns false otherwise. Always returns false in shipping builds. */
-	bool ShouldIgnoreCooldowns() const;
+	UE_API bool ShouldIgnoreCooldowns() const;
 
 	/** Returns true if ability costs are ignored, returns false otherwise. Always returns false in shipping builds. */
-	bool ShouldIgnoreCosts() const;
+	UE_API bool ShouldIgnoreCosts() const;
 
 	/** Show all abilities currently assigned to the local player */
 	UE_DEPRECATED(5.3, "Use DebugAbilitySystemAbilityListGrantedCommand")
@@ -187,8 +201,8 @@ class GAMEPLAYABILITIES_API UAbilitySystemGlobals : public UObject
 	bool bUseDebugTargetFromHud;
 
 	/** Helper functions for applying global scaling to various ability system tasks. This isn't meant to be a shipping feature, but to help with debugging and interation via cvar AbilitySystem.GlobalAbilityScale */
-	static void NonShipping_ApplyGlobalAbilityScaler_Rate(float& Rate);
-	static void NonShipping_ApplyGlobalAbilityScaler_Duration(float& Duration);
+	static UE_API void NonShipping_ApplyGlobalAbilityScaler_Rate(float& Rate);
+	static UE_API void NonShipping_ApplyGlobalAbilityScaler_Duration(float& Duration);
 
 	// Global Tags
 
@@ -247,49 +261,49 @@ class GAMEPLAYABILITIES_API UAbilitySystemGlobals : public UObject
 	int32	MinimalReplicationTagCountBits;
 
 	/** Initialize global tags by reading from config using the names and creating tags for use at runtime */
-	virtual void InitGlobalTags();
+	UE_API virtual void InitGlobalTags();
 
-	void InitTargetDataScriptStructCache();
+	UE_API void InitTargetDataScriptStructCache();
 
 	/** Initialize GameplayCue Parameters */
-	virtual void InitGameplayCueParameters(FGameplayCueParameters& CueParameters, const FGameplayEffectSpecForRPC &Spec);
-	virtual void InitGameplayCueParameters_GESpec(FGameplayCueParameters& CueParameters, const FGameplayEffectSpec &Spec);
-	virtual void InitGameplayCueParameters(FGameplayCueParameters& CueParameters, const FGameplayEffectContextHandle& EffectContext);
+	UE_API virtual void InitGameplayCueParameters(FGameplayCueParameters& CueParameters, const FGameplayEffectSpecForRPC &Spec);
+	UE_API virtual void InitGameplayCueParameters_GESpec(FGameplayCueParameters& CueParameters, const FGameplayEffectSpec &Spec);
+	UE_API virtual void InitGameplayCueParameters(FGameplayCueParameters& CueParameters, const FGameplayEffectContextHandle& EffectContext);
 
 	/**
 	 * Trigger async loading of the gameplay cue object libraries. By default, the manager will do this on creation,
 	 * but that behavior can be changed by a derived class overriding ShouldAsyncLoadObjectLibrariesAtStart and returning false.
 	 * In that case, this function must be called to begin the load
 	 */
-	virtual void StartAsyncLoadingObjectLibraries();
+	UE_API virtual void StartAsyncLoadingObjectLibraries();
 
 	/** Simple accessor to whether gameplay modifier evaluation channels should be allowed or not */
-	bool ShouldAllowGameplayModEvaluationChannels() const;
+	UE_API bool ShouldAllowGameplayModEvaluationChannels() const;
 
 	/**
 	 * Returns whether the specified gameplay mod evaluation channel is valid for use or not.
 	 * Considers whether channel usage is allowed at all, as well as if the specified channel has a valid alias for the game.
 	 */
-	bool IsGameplayModEvaluationChannelValid(EGameplayModEvaluationChannel Channel) const;
+	UE_API bool IsGameplayModEvaluationChannelValid(EGameplayModEvaluationChannel Channel) const;
 
 	/** Simple channel-based accessor to the alias name for the specified gameplay mod evaluation channel, if any */
-	const FName& GetGameplayModEvaluationChannelAlias(EGameplayModEvaluationChannel Channel) const;
+	UE_API const FName& GetGameplayModEvaluationChannelAlias(EGameplayModEvaluationChannel Channel) const;
 
 	/** Simple index-based accessor to the alias name for the specified gameplay mod evaluation channel, if any */
-	const FName& GetGameplayModEvaluationChannelAlias(int32 Index) const;
+	UE_API const FName& GetGameplayModEvaluationChannelAlias(int32 Index) const;
 
 	/** Path where the engine will load gameplay cue notifies from */
-	virtual TArray<FString> GetGameplayCueNotifyPaths();
+	UE_API virtual TArray<FString> GetGameplayCueNotifyPaths();
 
 	/** Add a path to the GameplayCueNotifyPaths array. */
-	virtual void AddGameplayCueNotifyPath(const FString& InPath);
+	UE_API virtual void AddGameplayCueNotifyPath(const FString& InPath);
 
 	/**
 	 * Remove the given gameplay cue notify path from the GameplayCueNotifyPaths array.
 	 *
 	 * @return Number of paths removed.
 	 */
-	virtual int32 RemoveGameplayCueNotifyPath(const FString& InPath);
+	UE_API virtual int32 RemoveGameplayCueNotifyPath(const FString& InPath);
 
 	UPROPERTY()
 	FNetSerializeScriptStructCache	TargetDataStructCache;
@@ -297,16 +311,16 @@ class GAMEPLAYABILITIES_API UAbilitySystemGlobals : public UObject
 	UPROPERTY()
 	FNetSerializeScriptStructCache	EffectContextStructCache;
 
-	void AddAttributeDefaultTables(const FName OwnerName, const TArray<FSoftObjectPath>& AttribDefaultTableNames);
-	void RemoveAttributeDefaultTables(const FName OwnerName, const TArray<FSoftObjectPath>& AttribDefaultTableNames);
+	UE_API void AddAttributeDefaultTables(const FName OwnerName, const TArray<FSoftObjectPath>& AttribDefaultTableNames);
+	UE_API void RemoveAttributeDefaultTables(const FName OwnerName, const TArray<FSoftObjectPath>& AttribDefaultTableNames);
 protected:
 
 	/** Get the SoftObjectPaths for all tables that should be loaded for default Attribute values */
-	virtual TArray<FSoftObjectPath> GetGlobalAttributeSetDefaultsTablePaths() const;
+	UE_API virtual TArray<FSoftObjectPath> GetGlobalAttributeSetDefaultsTablePaths() const;
 
-	virtual void InitAttributeDefaults();
-	virtual void ReloadAttributeDefaults();
-	virtual void AllocAttributeSetInitter();
+	UE_API virtual void InitAttributeDefaults();
+	UE_API virtual void ReloadAttributeDefaults();
+	UE_API virtual void AllocAttributeSetInitter();
 
 #define WITH_ABILITY_CHEATS		(!(UE_BUILD_SHIPPING || UE_BUILD_TEST))
 #if WITH_ABILITY_CHEATS
@@ -421,27 +435,30 @@ protected:
 	T* InternalGetLoadTable(T*& Table, FString TableName);
 
 #if WITH_EDITOR
-	void OnTableReimported(UObject* InObject);
-	void OnPreBeginPIE(const bool bIsSimulatingInEditor);
+	UE_API void OnTableReimported(UObject* InObject);
+	UE_API void OnPreBeginPIE(const bool bIsSimulatingInEditor);
 #endif
 
-	static void ResetCachedData();
-	void HandlePreLoadMap(const FWorldContext& WorldContext, const FString& MapName);
+	static UE_API void ResetCachedData();
+	UE_API void HandlePreLoadMap(const FWorldContext& WorldContext, const FString& MapName);
 
 #if WITH_EDITORONLY_DATA
 	bool RegisteredReimportCallback;
 #endif
 
 private:
-	void PerformDeveloperSettingsUpgrade();
+	UE_API void PerformDeveloperSettingsUpgrade();
+
+	FDelegateHandle ModulesChangedHandle;
+	FDelegateHandle ModulesUnloadedHandle;
 
 public:
 	//To add functionality for opening assets directly from the game.
-	void Notify_OpenAssetInEditor(FString AssetName, int AssetType);
+	UE_API void Notify_OpenAssetInEditor(FString AssetName, int AssetType);
 	FOnAbilitySystemAssetOpenedDelegate AbilityOpenAssetInEditorCallbacks;
 
 	//...for finding assets directly from the game.
-	void Notify_FindAssetInEditor(FString AssetName, int AssetType);
+	UE_API void Notify_FindAssetInEditor(FString AssetName, int AssetType);
 	FOnAbilitySystemAssetFoundDelegate AbilityFindAssetInEditorCallbacks;
 
 	// TurnBased Ability Timer start
@@ -467,3 +484,5 @@ struct FScopeCurrentGameplayEffectBeingApplied
 		UAbilitySystemGlobals::Get().PopCurrentAppliedGE();
 	}
 };
+
+#undef UE_API

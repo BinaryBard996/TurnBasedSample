@@ -7,6 +7,8 @@
 
 #include "GameplayAbilityWorldReticle_ActorVisualization.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class AGameplayAbilityTargetActor;
 class UMaterialInterface;
 
@@ -32,5 +34,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** Returns CollisionComponent subobject **/
-	GAMEPLAYABILITIES_API class UCapsuleComponent* GetCollisionComponent() { return CollisionComponent; }
+	class UCapsuleComponent* GetCollisionComponent() { return CollisionComponent; }
 };
+
+#undef UE_API

@@ -79,7 +79,7 @@ float FAbilityTimerManager::GetAbilityTimerRemaining(UAbilitySystemComponent* Ab
 		UE_LOG(LogAbilitySystemTurnbased, Display, TEXT("GetAbilityTimerRemaining-No valid ability system component for ability timer manager!"))
 		return 0.f;
 	}
-	
+
 	FAbilityTimerContainer& AbilityTimerContainer = GetAbilityTimerContainer(AbilitySystemComponent);
 	if(AbilityTimerContainer.TimerHandles.Find(InHandle) == INDEX_NONE)
 	{
@@ -139,7 +139,7 @@ void FAbilityTimerManager::SetAbilityTimer(UAbilitySystemComponent* AbilitySyste
 	}
 
 	ClearTimer(InOutHandle);
-	
+
 	if(InRate > 0.f)
 	{
 		// set up the new timer
@@ -150,7 +150,7 @@ void FAbilityTimerManager::SetAbilityTimer(UAbilitySystemComponent* AbilitySyste
 		FAbilityTimerContainer& AbilityTimerContainer = GetAbilityTimerContainer(AbilitySystemComponent);
 		const float FirstDelay = (InFirstDelay >= 0.f) ? InFirstDelay : InRate;
 		NewTimerData->ExpireTime = AbilityTimerContainer.Turn + FirstDelay;
-		
+
 		AddAbilityTimer(AbilitySystemComponent, InOutHandle);
 	}
 	else
@@ -195,9 +195,9 @@ void FAbilityTimerManager::ClearAllAbilityTimerContainers()
 	{
 		if(AbilityTimerContainer.Key.IsValid())
 		{
-			AbilityTimerContainer.Key.Get()->ResetTurn();	
+			AbilityTimerContainer.Key.Get()->ResetTurn();
 		}
-		
+
 		for(auto& TimerHandle: AbilityTimerContainer.Value.TimerHandles)
 		{
 			ClearTimer(TimerHandle);

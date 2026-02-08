@@ -6,24 +6,26 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitDelay.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FWaitDelayDelegate);
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitDelay : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitDelay : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
 	UPROPERTY(BlueprintAssignable)
 	FWaitDelayDelegate	OnFinish;
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	/** Return debug string describing task */
-	virtual FString GetDebugString() const override;
+	UE_API virtual FString GetDebugString() const override;
 
 	/** Wait specified time. This is functionally the same as a standard Delay node. */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitDelay* WaitDelay(UGameplayAbility* OwningAbility, float Time);
+	static UE_API UAbilityTask_WaitDelay* WaitDelay(UGameplayAbility* OwningAbility, float Time);
 
 private:
 
@@ -32,3 +34,5 @@ private:
 	float Time;
 	float TimeStarted;
 };
+
+#undef UE_API

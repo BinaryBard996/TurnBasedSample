@@ -2,7 +2,6 @@
 
 #pragma once
 
-#if UE_WITH_IRIS
 
 #include "Iris/Serialization/NetSerializer.h"
 
@@ -15,4 +14,3 @@ UE_NET_DECLARE_SERIALIZER(FGameplayAbilityTargetDataHandleNetSerializer, GAMEPLA
 
 void InitGameplayAbilityTargetDataHandleNetSerializerTypeCache();
 
-#endif // UE_WITH_IRIS

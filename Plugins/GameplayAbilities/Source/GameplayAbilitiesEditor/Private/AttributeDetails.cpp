@@ -418,9 +418,6 @@ TSharedRef<SWidget> FScalableFloatDetails::CreateCurveTableWidget()
 			.ToolTipText(this, &FScalableFloatDetails::GetCurveTableTooltip)
 			.Font(FAppStyle::GetFontStyle(TEXT("PropertyWindow.NormalFont")))
 		];
-
-	// Need to make the buttons go away and show custom prompt
-	return CurveTableProperty->CreatePropertyValueWidget(false);
 }
 
 TSharedRef<SWidget> FScalableFloatDetails::CreateRegistryTypeWidget()

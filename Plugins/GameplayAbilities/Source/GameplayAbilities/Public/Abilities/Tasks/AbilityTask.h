@@ -11,6 +11,8 @@
 #include "Abilities/GameplayAbility.h"
 #include "AbilityTask.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 class UGameplayTasksComponent;
 
@@ -84,18 +86,24 @@ enum class EAbilityTaskWaitState : uint8
 	WaitingOnAvatar = 0x04
 };
 
-UCLASS(Abstract)
-class GAMEPLAYABILITIES_API UAbilityTask : public UGameplayTask
+UCLASS(Abstract, MinimalAPI)
+class UAbilityTask : public UGameplayTask
 {
 	GENERATED_UCLASS_BODY()
 
-	virtual void OnDestroy(bool bInOwnerFinished) override;
-	virtual void BeginDestroy() override;
+	UE_API virtual void OnDestroy(bool bInOwnerFinished) override;
+	UE_API virtual void BeginDestroy() override;
+
+	/**
+	 * Clears potential dangling pointers. Added to prevent dangling pointer to GameplayAbility that issued the task.
+	 * When overriding use EndTask() instead.
+	 */
+	UE_API virtual void PreDestroyFromReplication() override;
 	
 	/** Returns spec handle for owning ability */
-	FGameplayAbilitySpecHandle GetAbilitySpecHandle() const;
+	UE_API FGameplayAbilitySpecHandle GetAbilitySpecHandle() const;
 
-	void SetAbilitySystemComponent(UAbilitySystemComponent* InAbilitySystemComponent);
+	UE_API void SetAbilitySystemComponent(UAbilitySystemComponent* InAbilitySystemComponent);
 
 	/** GameplayAbility that created us */
 	UPROPERTY()
@@ -105,23 +113,23 @@ class GAMEPLAYABILITIES_API UAbilityTask : public UGameplayTask
 	TWeakObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 
 	/** Returns true if the ability is a locally predicted ability running on a client. Usually this means we need to tell the server something. */
-	bool IsPredictingClient() const;
+	UE_API bool IsPredictingClient() const;
 
 	/** Returns true if we are executing the ability on the server for a non locally controlled client */
-	bool IsForRemoteClient() const;
+	UE_API bool IsForRemoteClient() const;
 
 	/** Returns true if we are executing the ability on the locally controlled client */
-	bool IsLocallyControlled() const;
+	UE_API bool IsLocallyControlled() const;
 
 	/** Returns ActivationPredictionKey of owning ability */
-	FPredictionKey GetActivationPredictionKey() const;
+	UE_API FPredictionKey GetActivationPredictionKey() const;
 
 	/** This should be called prior to broadcasting delegates back into the ability graph. This makes sure the ability is still active.  */
-	bool ShouldBroadcastAbilityTaskDelegates() const;
+	UE_API bool ShouldBroadcastAbilityTaskDelegates() const;
 
-	virtual void InitSimulatedTask(UGameplayTasksComponent& InGameplayTasksComponent) override;
+	UE_API virtual void InitSimulatedTask(UGameplayTasksComponent& InGameplayTasksComponent) override;
 
-	static void DebugRecordAbilityTaskCreatedByAbility(const UObject* Ability);
+	static UE_API void DebugRecordAbilityTaskCreatedByAbility(const UObject* Ability);
 
 	/** Helper function for instantiating and initializing a new task */
 	template <class T>
@@ -146,21 +154,21 @@ class GAMEPLAYABILITIES_API UAbilityTask : public UGameplayTask
 
 	// this function has been added to make sure AbilityTasks don't use this method
 	template <class T>
-	FORCEINLINE static T* NewTask(UObject* WorldContextObject, FName InstanceName = FName())
+	inline static T* NewTask(UObject* WorldContextObject, FName InstanceName = FName())
 	{
 		static_assert(DelayedFalse<T>(), "UAbilityTask::NewTask should never be used. Use NewAbilityTask instead");
 		return nullptr;
 	}
 
 	/** Called when the ability task is waiting on remote player data. IF the remote player ends the ability prematurely, and a task with this set is still running, the ability is killed. */
-	void SetWaitingOnRemotePlayerData();
-	void ClearWaitingOnRemotePlayerData();
-	virtual bool IsWaitingOnRemotePlayerdata() const override;
+	UE_API void SetWaitingOnRemotePlayerData();
+	UE_API void ClearWaitingOnRemotePlayerData();
+	UE_API virtual bool IsWaitingOnRemotePlayerdata() const override;
 
 	/** same as RemotePlayerData but for ACharacter type of state (movement state, etc) */
-	void SetWaitingOnAvatar();
-	void ClearWaitingOnAvatar();
-	virtual bool IsWaitingOnAvatar() const override;
+	UE_API void SetWaitingOnAvatar();
+	UE_API void ClearWaitingOnAvatar();
+	UE_API virtual bool IsWaitingOnAvatar() const override;
 
 	/** What we are waiting on */
 	uint8 WaitStateBitMask;
@@ -168,7 +176,7 @@ class GAMEPLAYABILITIES_API UAbilityTask : public UGameplayTask
 
 protected:
 	/** Helper method for registering client replicated callbacks */
-	bool CallOrAddReplicatedDelegate(EAbilityGenericReplicatedEvent::Type Event, FSimpleMulticastDelegate::FDelegate Delegate);
+	UE_API bool CallOrAddReplicatedDelegate(EAbilityGenericReplicatedEvent::Type Event, FSimpleMulticastDelegate::FDelegate Delegate);
 };
 
 //For searching through lists of ability instances
@@ -208,3 +216,5 @@ struct FAbilityInstanceClassPredicate
 		if (Ability) \
 			Ability->AddAbilityTaskDebugMessage(this, FString::Printf(TEXT(Format), ##__VA_ARGS__)); \
 	} 
+
+#undef UE_API

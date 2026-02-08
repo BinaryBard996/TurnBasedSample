@@ -4,7 +4,11 @@
 
 #include "GameplayEffectAggregator.h"
 
-struct GAMEPLAYABILITIES_API FAggregatorEvaluateMetaDataLibrary
+#define UE_API GAMEPLAYABILITIES_API
+
+struct FAggregatorEvaluateMetaDataLibrary
 {
-	static FAggregatorEvaluateMetaData MostNegativeMod_AllPositiveMods;
+	static UE_API FAggregatorEvaluateMetaData MostNegativeMod_AllPositiveMods;
 };
+
+#undef UE_API

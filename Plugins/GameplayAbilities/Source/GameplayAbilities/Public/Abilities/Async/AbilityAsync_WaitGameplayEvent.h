@@ -7,10 +7,12 @@
 #include "Abilities/GameplayAbilityTypes.h"
 #include "AbilityAsync_WaitGameplayEvent.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityAsync_WaitGameplayEvent : public UAbilityAsync
+UCLASS(MinimalAPI)
+class UAbilityAsync_WaitGameplayEvent : public UAbilityAsync
 {
 	GENERATED_BODY()
 
@@ -22,7 +24,7 @@ public:
 	 * If used in an ability graph, this async action will wait even after activation ends. It's recommended to use WaitGameplayEvent instead.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Async", meta = (DefaultToSelf = "TargetActor", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityAsync_WaitGameplayEvent* WaitGameplayEventToActor(AActor* TargetActor, UPARAM(meta=(GameplayTagFilter="GameplayEventTagsCategory")) FGameplayTag EventTag, bool OnlyTriggerOnce = false, bool OnlyMatchExact = true);
+	static UE_API UAbilityAsync_WaitGameplayEvent* WaitGameplayEventToActor(AActor* TargetActor, UPARAM(meta=(GameplayTagFilter="GameplayEventTagsCategory")) FGameplayTag EventTag, bool OnlyTriggerOnce = false, bool OnlyMatchExact = true);
 
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FEventReceivedDelegate, FGameplayEventData, Payload);
 
@@ -30,11 +32,11 @@ public:
 	FEventReceivedDelegate EventReceived;
 
 protected:
-	virtual void Activate() override;
-	virtual void EndAction() override;
+	UE_API virtual void Activate() override;
+	UE_API virtual void EndAction() override;
 
-	virtual void GameplayEventCallback(const FGameplayEventData* Payload);
-	virtual void GameplayEventContainerCallback(FGameplayTag MatchingTag, const FGameplayEventData* Payload);
+	UE_API virtual void GameplayEventCallback(const FGameplayEventData* Payload);
+	UE_API virtual void GameplayEventContainerCallback(FGameplayTag MatchingTag, const FGameplayEventData* Payload);
 
 	FGameplayTag Tag;
 	bool OnlyTriggerOnce = false;
@@ -42,3 +44,5 @@ protected:
 
 	FDelegateHandle MyHandle;
 };
+
+#undef UE_API

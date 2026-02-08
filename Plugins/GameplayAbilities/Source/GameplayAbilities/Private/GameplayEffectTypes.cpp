@@ -17,6 +17,10 @@
 #include "Misc/DataValidation.h"
 #endif
 
+#include "Iris/Serialization/NetBitStreamUtil.h"
+#include "Iris/Serialization/PolymorphicNetSerializerImpl.h"
+#include "Iris/ReplicationState/PropertyNetSerializerInfoRegistry.h"
+
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayEffectTypes)
 
 
@@ -39,6 +43,20 @@ static FAutoConsoleVariableRef CVarWarnIfTryingToReplicateNotSupportedActorRefer
 	ECVF_Default);
 }
 #endif
+
+static bool bUseMultiplyCompoundFix = true;
+static FAutoConsoleVariableRef CVarUseMultiplyCompoundFix(
+	TEXT("AbilitySystem.UseMultiplyCompundFix"),
+	bUseMultiplyCompoundFix,
+	TEXT("True/False - Add proper logic for compound multiplication in stackable GEs."),
+	ECVF_Default);
+
+TAutoConsoleVariable<bool> CVarReplicateTagCountContainerWithIris(
+		TEXT("AbilitySystem.Fix.ReplicateTagCountContainerWithIris"),
+		false,
+		TEXT("Default: True.  When true will use Iris serialization for Gameplay Tag Count Container enabling tag rep state promotion with iris."),
+		ECVF_Default);
+
 
 FGameplayModEvaluationChannelSettings::FGameplayModEvaluationChannelSettings()
 {
@@ -123,7 +141,21 @@ float GameplayEffectUtilities::ComputeStackedModifierMagnitude(float BaseCompute
 	if (ModOp != EGameplayModOp::Override)
 	{
 		StackMag -= OperationBias;
-		StackMag *= StackCount;
+		if (bUseMultiplyCompoundFix)
+		{
+			if (ModOp == EGameplayModOp::MultiplyCompound)
+			{
+				StackMag = FMath::Pow(StackMag, StackCount);
+			}
+			else
+			{
+				StackMag *= StackCount;
+			}
+		}
+		else
+		{
+			StackMag *= StackCount;
+		}
 		StackMag += OperationBias;
 	}
 
@@ -352,9 +384,9 @@ bool FGameplayEffectContext::IsLocallyControlledPlayer() const
 	{
 		Pawn = Cast<APawn>(EffectCauser.Get());
 	}
-	if (Pawn && Pawn->Controller)
+	if (Pawn && Pawn->GetController())
 	{
-		return Pawn->Controller->IsLocalPlayerController();
+		return Pawn->GetController()->IsLocalPlayerController();
 	}
 	return false;
 }
@@ -478,6 +510,208 @@ FString EGameplayCueEventToString(int32 Type)
 	return e->GetNameStringByValue(Type);
 }
 
+class FNetGameplayTagCountContainerState : public INetDeltaBaseState
+{
+public:
+	struct FGameplayTagCountStateItem
+	{
+		FGameplayTag Tag;
+		int32 Count = -1;
+		EGameplayTagReplicationState ReplicationState = EGameplayTagReplicationState::None;
+
+		bool operator== (const FGameplayTagCountStateItem& Other) const
+		{
+			return Tag == Other.Tag && Count == Other.Count && ReplicationState == Other.ReplicationState;
+		}
+	};
+
+	virtual bool IsStateEqual(INetDeltaBaseState* OtherState) override
+	{
+		FNetGameplayTagCountContainerState* Other = static_cast<FNetGameplayTagCountContainerState*>(OtherState);
+		return (TagStates == Other->TagStates);
+	}
+
+	TArray<FGameplayTagCountStateItem> TagStates;
+};
+
+bool FGameplayTagCountContainer::NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParams)
+{
+	bool bPackCount = false;
+	
+	if (DeltaParams.Writer)
+	{
+		bool bIsOwner = false;
+		if (AActor* OwnerActor = Cast<UActorComponent>(DeltaParams.Object)->GetOwner())
+		{
+			if (UNetConnection* OwnerNetConnection = OwnerActor->GetNetConnection())
+			{
+				bIsOwner = OwnerNetConnection == DeltaParams.Connection;
+			}
+		}
+		
+		FBitWriter& Writer = *DeltaParams.Writer;
+
+		FNetGameplayTagCountContainerState* OldState = static_cast<FNetGameplayTagCountContainerState*>(DeltaParams.OldState);
+		FNetGameplayTagCountContainerState* NewState = new FNetGameplayTagCountContainerState();
+
+		// Keep track of the indices for changed data in the Items list so we can iterate just those after calculating the new state.
+		TArray<int32> ChangeIdx;
+
+		check(DeltaParams.NewState);
+		*DeltaParams.NewState = TSharedPtr<INetDeltaBaseState>(NewState);
+		NewState->TagStates.Reserve(Items.Num());
+		ChangeIdx.Reserve(Items.Num());
+
+		// We set ChangelistHistory and LastAckedHistory to 0, as that's the default RepLayout expects.
+		// Setting them to anything else may cause issues with initial sends.
+		uint32 OldChangelistHistory = 0;
+		uint32 OldLastAckedHistory = 0;
+		
+		TArray<FNetGameplayTagCountContainerState::FGameplayTagCountStateItem> Removals = OldState ? OldState->TagStates : TArray<FNetGameplayTagCountContainerState::FGameplayTagCountStateItem>{};
+
+		// Iterate over our current items and build our new state data while removing valid entries from the Removals list so we know what's missing
+		for (const FGameplayTagCountItem& CountItem : Items)
+		{
+			// Find this Item in the OldState
+			FNetGameplayTagCountContainerState::FGameplayTagCountStateItem* OldItem = Removals.FindByPredicate(
+				[&CountItem](FNetGameplayTagCountContainerState::FGameplayTagCountStateItem& Item)
+				{
+					return Item.Tag == CountItem.Tag;
+				});
+
+			// Warn if the ReplicationState ever changed; it's an indication that the code that uses it has conflicting tag count requirements
+			UE_CLOG(OldItem && OldItem->ReplicationState > CountItem.ReplicationState, LogAbilitySystem, Warning,
+				TEXT("Existing tag: %s with \"%s\" replication state now serializing with state \"%s\""), 
+				*CountItem.Tag.ToString(), *UEnum::GetDisplayValueAsText(OldItem->ReplicationState).ToString(), *UEnum::GetDisplayValueAsText(CountItem.ReplicationState).ToString());
+
+			if (CountItem.ReplicationState == EGameplayTagReplicationState::None)
+			{
+				// We don't replicate this tag, so don't save its state
+				continue;
+			}
+
+			// Record the NewState for the CountItem
+			FNetGameplayTagCountContainerState::FGameplayTagCountStateItem& NewItem = NewState->TagStates.AddDefaulted_GetRef();
+			NewItem.Tag = CountItem.Tag;
+			NewItem.ReplicationState = CountItem.ReplicationState;
+
+			bPackCount = CountItem.ReplicationState >= (bIsOwner ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::TagAndCountToAll);
+			NewItem.Count = bPackCount ? CountItem.Count : 1;
+			
+			if (!OldItem)
+			{
+				// This was a tag added
+				ChangeIdx.Add(NewState->TagStates.Num() - 1);
+				continue;
+			}
+
+			if (bPackCount && OldItem->Count != NewItem.Count)
+			{
+				// This was a tag count change
+				ChangeIdx.Add(NewState->TagStates.Num() - 1);
+			}
+
+			Removals.RemoveSingleSwap(*OldItem);
+		}
+
+		uint32 NumRemovals = Removals.Num();
+
+		// If there's no changes between the states we can just leave
+		if (ChangeIdx.Num() == 0 && NumRemovals == 0)
+		{
+			return false;
+		}
+
+		if (OldState)
+		{
+			OldChangelistHistory = DeltaParams.OldState->GetChangelistHistory();
+			OldLastAckedHistory = DeltaParams.OldState->GetLastAckedHistory();
+		}
+
+		NewState->SetChangelistHistory(OldChangelistHistory);
+		NewState->SetLastAckedHistory(OldLastAckedHistory);
+
+		// Pack any tags left in the Removals array to be removed on the client side
+		Writer.SerializeIntPacked(NumRemovals);
+		bool bTagSuccess = true;
+		if (NumRemovals > 0)
+		{
+			for (FNetGameplayTagCountContainerState::FGameplayTagCountStateItem& Item : Removals)
+			{
+				Item.Tag.NetSerialize(Writer, DeltaParams.Map, bTagSuccess);
+			}
+		}
+
+		// Finish packing up any remaining changes to new tags or count changes.
+		uint32 NumChanges = ChangeIdx.Num();
+		Writer.SerializeIntPacked(NumChanges);
+
+		uint32 TagCount = 0;
+		for (int32& Idx : ChangeIdx)
+		{
+			FNetGameplayTagCountContainerState::FGameplayTagCountStateItem& NewItem = NewState->TagStates[Idx];
+			// only pack count if we're sending to the correct client for the replication state.
+			bPackCount = NewItem.ReplicationState >= (bIsOwner ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::TagAndCountToAll);
+			NewItem.Tag.NetSerialize(Writer, DeltaParams.Map, bTagSuccess);
+			Writer.SerializeBits(&bPackCount, 1);
+			if (bPackCount)
+			{
+				TagCount = (uint32)NewItem.Count;
+				Writer.SerializeIntPacked(TagCount);
+			}
+		}
+	}
+	
+	if (DeltaParams.Reader)
+	{
+		FBitReader& Reader = *DeltaParams.Reader;
+		bool bTagSuccess = true;
+
+		uint32 NumRemovals = 0;
+		Reader.SerializeIntPacked(NumRemovals);
+		if (NumRemovals > 0)
+		{
+			FNetGameplayTagCountContainerState::FGameplayTagCountStateItem RemovedItem{};
+			for (; NumRemovals > 0; NumRemovals--)
+			{
+				RemovedItem.Tag.NetSerialize(Reader, DeltaParams.Map, bTagSuccess);
+				int32* Count = GameplayTagCountMap.Find(RemovedItem.Tag);
+				if (Count && *Count > 0)
+				{
+					UpdateTagMap_Internal(RemovedItem.Tag, -(*Count), EGameplayTagReplicationState::None);
+				}
+			}
+		}
+		
+		uint32 NumChanges = 0;
+		Reader.SerializeIntPacked(NumChanges);
+		if (NumChanges > 0)
+		{
+			FNetGameplayTagCountContainerState::FGameplayTagCountStateItem UpdatedItem{};
+			FGameplayTag UpdatedTag;
+			uint32 NewCount = 1;
+			for (; NumChanges > 0; NumChanges--)
+			{
+				NewCount = 1;
+				UpdatedItem.Tag.NetSerialize(Reader, DeltaParams.Map, bTagSuccess);
+				Reader.SerializeBits(&bPackCount, 1);
+				if (bPackCount)
+				{
+					Reader.SerializeIntPacked(NewCount);
+				}
+
+				SetTagCount(UpdatedItem.Tag, NewCount, EGameplayTagReplicationState::None);
+			}
+		}
+	}
+	return true;
+}
+
+void FGameplayTagCountContainer::SetOwner(UAbilitySystemComponent* ASC)
+{
+	Owner = ASC;
+}
+
 void FGameplayTagCountContainer::Notify_StackCountChange(const FGameplayTag& Tag)
 {	
 	// The purpose of this function is to let anyone listening on the EGameplayTagEventType::AnyCountChange event know that the 
@@ -511,8 +745,6 @@ FOnGameplayEffectTagCountChanged& FGameplayTagCountContainer::RegisterGameplayTa
 void FGameplayTagCountContainer::Reset(bool bResetCallbacks)
 {
 	GameplayTagCountMap.Reset();
-	ExplicitTagCountMap.Reset();
-	ExplicitTags.Reset();
 
 	if (bResetCallbacks)
 	{
@@ -521,47 +753,69 @@ void FGameplayTagCountContainer::Reset(bool bResetCallbacks)
 	}
 }
 
-bool FGameplayTagCountContainer::UpdateExplicitTags(const FGameplayTag& Tag, const int32 CountDelta, const bool bDeferParentTagsOnRemove)
+bool FGameplayTagCountContainer::UpdateExplicitTags(const FGameplayTag& Tag, const int32 CountDelta, const bool bDeferParentTagsOnRemove, EGameplayTagReplicationState TagRepState)
 {
-	const bool bTagAlreadyExplicitlyExists = ExplicitTags.HasTagExact(Tag);
+	int32 TagCountIndex = Items.Find(Tag);
 
-	// Need special case handling to maintain the explicit tag list correctly, adding the tag to the list if it didn't previously exist and a
-	// positive delta comes in, and removing it from the list if it did exist and a negative delta comes in.
-	if (!bTagAlreadyExplicitlyExists)
+	if (TagCountIndex != INDEX_NONE)
 	{
-		// Brand new tag with a positive delta needs to be explicitly added
-		if (CountDelta > 0)
+		FGameplayTagCountItem& TagCountItem = Items[TagCountIndex];
+		const bool RepTypeMatch = TagCountItem.ReplicationState == TagRepState;
+		if (!RepTypeMatch && CountDelta > 0)
 		{
-			ExplicitTags.AddTag(Tag);
+			// We're attempting to predict a replicated tag on a client but they already have potentially non-replicated tags
+			if (Owner && Owner->GetOwnerRole() != ROLE_Authority && TagCountItem.ReplicationState == EGameplayTagReplicationState::None)
+			{
+				ABILITY_LOG(Warning, TEXT("Attempting to predict %s tag addition, but potentially non-replicated tag already exists"), *Tag.ToString());
+			}
+			// We're changing the rep state of an existing tag on the server
+			else if (Owner && Owner->GetOwnerRole() == ROLE_Authority && TagCountItem.ReplicationState > EGameplayTagReplicationState::None)
+			{
+				ABILITY_LOG(Warning, TEXT("Trying to change existing tag \"%s\" replication state from \"%s\" to \"%s\""), *Tag.ToString(), *UEnum::GetDisplayValueAsText(TagCountItem.ReplicationState).ToString(), *UEnum::GetDisplayValueAsText(TagRepState).ToString());
+			}
+
+			// Promote our rep state to the higher level
+			TagCountItem.ReplicationState = TagRepState > TagCountItem.ReplicationState ? TagRepState : TagCountItem.ReplicationState;
+			TagRepState = TagCountItem.ReplicationState;
 		}
-		// Block attempted reduction of non-explicit tags, as they were never truly added to the container directly
+		if (!UE::Net::ShouldUseIrisReplication() || (UE::Net::ShouldUseIrisReplication() && CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread()))
+		{
+			// make sure clients only have the 1 tag if it's tag Only.
+			if (Owner && Owner->GetOwnerRole() != ROLE_Authority && CountDelta > 0  && TagCountItem.ReplicationState == EGameplayTagReplicationState::TagOnly)
+			{
+				TagCountItem.Count = 1;
+			}
+			else
+			{
+				TagCountItem.Count += CountDelta;
+			}
+		}
 		else
 		{
-			// only warn about tags that are in the container but will not be removed because they aren't explicitly in the container
-			if (ExplicitTags.HasTag(Tag))
-			{
-				ABILITY_LOG(Warning, TEXT("Attempted to remove tag: %s from tag count container, but it is not explicitly in the container!"), *Tag.ToString());
-			}
-			return false;
+			TagCountItem.Count += CountDelta;
+		}
+		
+		if (TagCountItem.Count <= 0)
+		{
+			Items.RemoveAtSwap(TagCountIndex);
+			ExplicitTags.RemoveTag(Tag, bDeferParentTagsOnRemove);
 		}
 	}
-
-	// Update the explicit tag count map. This has to be separate than the map below because otherwise the count of nested tags ends up wrong
-	int32& ExistingCount = ExplicitTagCountMap.FindOrAdd(Tag);
-
-	ExistingCount = FMath::Max(ExistingCount + CountDelta, 0);
-
-	// If our new count is 0, remove us from the explicit tag list
-	if (ExistingCount <= 0)
+	else if (CountDelta > 0)
 	{
-		// Remove from the explicit list
-		ExplicitTags.RemoveTag(Tag, bDeferParentTagsOnRemove);
+		Items.Add(FGameplayTagCountItem(Tag, CountDelta, TagRepState));
+		ExplicitTags.AddTag(Tag);
+	}
+	else
+	{
+		ABILITY_LOG(Warning, TEXT("Attempted to remove tag: %s from tag count container, but it is not explicitly in the container!"), *Tag.ToString());
+		return false;
 	}
 
 	return true;
 }
 
-bool FGameplayTagCountContainer::GatherTagChangeDelegates(const FGameplayTag& Tag, const int32 CountDelta, TArray<FDeferredTagChangeDelegate>& TagChangeDelegates)
+bool FGameplayTagCountContainer::GatherTagChangeDelegates(const FGameplayTag& Tag, const int32 CountDelta, TArray<FDeferredTagChangeDelegate>& TagChangeDelegates, EGameplayTagReplicationState TagRepState)
 {
 	// Check if change delegates are required to fire for the tag or any of its parents based on the count change
 	FGameplayTagContainer TagAndParentsContainer = Tag.GetGameplayTagParents();
@@ -574,10 +828,14 @@ bool FGameplayTagCountContainer::GatherTagChangeDelegates(const FGameplayTag& Ta
 		int32& TagCountRef = GameplayTagCountMap.FindOrAdd(CurTag);
 
 		const int32 OldCount = TagCountRef;
-
+		
+		const bool UsingCountContainerRep = !UE::Net::ShouldUseIrisReplication() || (UE::Net::ShouldUseIrisReplication() && CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread());
+		const bool ClampTagOnlyCount = UsingCountContainerRep && Owner && Owner->GetOwnerRole() != ROLE_Authority && CountDelta > 0  && TagRepState == EGameplayTagReplicationState::TagOnly;
+		
 		// Apply the delta to the count in the map
 		int32 NewTagCount = FMath::Max(OldCount + CountDelta, 0);
-		TagCountRef = NewTagCount;
+		
+		TagCountRef = ClampTagOnlyCount ? FMath::Min(NewTagCount, 1) : NewTagCount;
 
 		// If a significant change (new addition or total removal) occurred, trigger related delegates
 		const bool SignificantChange = (OldCount == 0 || NewTagCount == 0);
@@ -585,9 +843,9 @@ bool FGameplayTagCountContainer::GatherTagChangeDelegates(const FGameplayTag& Ta
 		if (SignificantChange)
 		{
 			TagChangeDelegates.AddDefaulted();
-			TagChangeDelegates.Last().BindLambda([Delegate = OnAnyTagChangeDelegate, CurTag, NewTagCount]()
+			TagChangeDelegates.Last().BindLambda([Delegate = OnAnyTagChangeDelegate, CurTag, TagCountRef]()
 			{
-				Delegate.Broadcast(CurTag, NewTagCount);
+				Delegate.Broadcast(CurTag, TagCountRef);
 			});
 		}
 
@@ -595,17 +853,17 @@ bool FGameplayTagCountContainer::GatherTagChangeDelegates(const FGameplayTag& Ta
 		if (DelegateInfo)
 		{
 			TagChangeDelegates.AddDefaulted();
-			TagChangeDelegates.Last().BindLambda([Delegate = DelegateInfo->OnAnyChange, CurTag, NewTagCount]()
+			TagChangeDelegates.Last().BindLambda([Delegate = DelegateInfo->OnAnyChange, CurTag, TagCountRef]()
 			{
-				Delegate.Broadcast(CurTag, NewTagCount);
+				Delegate.Broadcast(CurTag, TagCountRef);
 			});
 
 			if (SignificantChange)
 			{
 				TagChangeDelegates.AddDefaulted();
-				TagChangeDelegates.Last().BindLambda([Delegate = DelegateInfo->OnNewOrRemove, CurTag, NewTagCount]()
+				TagChangeDelegates.Last().BindLambda([Delegate = DelegateInfo->OnNewOrRemove, CurTag, TagCountRef]()
 				{
-					Delegate.Broadcast(CurTag, NewTagCount);
+					Delegate.Broadcast(CurTag, TagCountRef);
 				});
 			}
 		}
@@ -614,15 +872,25 @@ bool FGameplayTagCountContainer::GatherTagChangeDelegates(const FGameplayTag& Ta
 	return CreatedSignificantChange;
 }
 
-bool FGameplayTagCountContainer::UpdateTagMap_Internal(const FGameplayTag& Tag, int32 CountDelta)
+bool FGameplayTagCountContainer::UpdateTagMap_Internal(const FGameplayTag& Tag, int32 CountDelta, EGameplayTagReplicationState TagRepState)
 {
-	if (!UpdateExplicitTags(Tag, CountDelta, false))
+	if (!ensureMsgf(Tag.IsValid(), TEXT("FGameplayTagCountContainer attempted to update tag map with an invalid Tag (None)!")))
+	{
+		return false;
+	}
+	
+	if (!ensureMsgf(CountDelta != 0, TEXT("FGameplayTagCountContainer Modifying tag count by 0 for tag %s"), *Tag.ToString()))
+	{
+		return false;
+	}
+
+	if (!UpdateExplicitTags(Tag, CountDelta, false, TagRepState))
 	{
 		return false;
 	}
 
 	TArray<FDeferredTagChangeDelegate> DeferredTagChangeDelegates;
-	bool bSignificantChange = GatherTagChangeDelegates(Tag, CountDelta, DeferredTagChangeDelegates);
+	bool bSignificantChange = GatherTagChangeDelegates(Tag, CountDelta, DeferredTagChangeDelegates, TagRepState);
 	for (FDeferredTagChangeDelegate& Delegate : DeferredTagChangeDelegates)
 	{
 		Delegate.Execute();
@@ -631,14 +899,14 @@ bool FGameplayTagCountContainer::UpdateTagMap_Internal(const FGameplayTag& Tag, 
 	return bSignificantChange;
 }
 
-bool FGameplayTagCountContainer::UpdateTagMapDeferredParentRemoval_Internal(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& DeferredTagChangeDelegates)
+bool FGameplayTagCountContainer::UpdateTagMapDeferredParentRemoval_Internal(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& DeferredTagChangeDelegates, EGameplayTagReplicationState TagRepState)
 {
-	if (!UpdateExplicitTags(Tag, CountDelta, true))
+	if (!UpdateExplicitTags(Tag, CountDelta, true, TagRepState))
 	{
 		return false;
 	}
 
-	return GatherTagChangeDelegates(Tag, CountDelta, DeferredTagChangeDelegates);
+	return GatherTagChangeDelegates(Tag, CountDelta, DeferredTagChangeDelegates, TagRepState);
 }
 
 FGameplayTagBlueprintPropertyMap::FGameplayTagBlueprintPropertyMap()
@@ -773,6 +1041,12 @@ void FGameplayTagBlueprintPropertyMap::Unregister()
 
 void FGameplayTagBlueprintPropertyMap::GameplayTagEventCallback(const FGameplayTag Tag, int32 NewCount, TWeakObjectPtr<UObject> RegisteredOwner)
 {
+	if (!RegisteredOwner.IsValid() || !CachedOwner.IsValid())
+	{
+		ABILITY_LOG(Warning, TEXT("FGameplayTagBlueprintPropertyMap::GameplayTagEventCallback called with corrupted RegisteredOwner or corrupted CachedOwner!"));
+		return;
+	}
+	
 	// If the index and serial don't match with registered owner, the memory might be trashed so abort
 	if (!ensure(RegisteredOwner.HasSameIndexAndSerialNumber(CachedOwner)))
 	{
@@ -1261,9 +1535,9 @@ bool FGameplayCueParameters::IsInstigatorLocallyControlledPlayer(AActor* Fallbac
 			}
 		}
 
-		if (Pawn && Pawn->Controller)
+		if (Pawn && Pawn->GetController())
 		{
-			return Pawn->Controller->IsLocalPlayerController();
+			return Pawn->GetController()->IsLocalPlayerController();
 		}
 	}
 
@@ -1463,8 +1737,15 @@ void FMinimalReplicationTagCountMap::UpdateOwnerTagMap()
 	{
 		for (auto It = TagMap.CreateIterator(); It; ++It)
 		{
-			Owner->SetTagMapCount(It->Key, It->Value);
+			const FGameplayTag Tag = It->Key;
+			const int32 NewValue = It->Value;
 
+			Owner->SetTagMapCount(Tag, NewValue);
+			UE_CLOG((NewValue != It->Value), LogAbilitySystem, Warning, TEXT("Callback for SetTagMapCount(%s, %d) caused its own TagCount to change to %d (likely an unwanted recursion in your registered TagChanged Listeners)"), *Tag.ToString(), NewValue, It->Value);
+		}
+
+		for (auto It = TagMap.CreateIterator(); It; ++It)
+		{
 			// Remove tags with a count of zero from the map. This prevents them
 			// from being replicated incorrectly when recording client replays.
 			if (It->Value == 0)

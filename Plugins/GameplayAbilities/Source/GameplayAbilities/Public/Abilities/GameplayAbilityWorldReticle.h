@@ -6,6 +6,8 @@
 #include "GameFramework/Actor.h"
 #include "GameplayAbilityWorldReticle.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class APlayerController;
 class AGameplayAbilityTargetActor;
 
@@ -25,43 +27,43 @@ struct FWorldReticleParameters
 };
 
 /** Reticles allow targeting to be visualized. Tasks can spawn these. Artists/designers can create BPs for these. */
-UCLASS(Blueprintable, notplaceable)
-class GAMEPLAYABILITIES_API AGameplayAbilityWorldReticle : public AActor
+UCLASS(Blueprintable, notplaceable, MinimalAPI)
+class AGameplayAbilityWorldReticle : public AActor
 {
 	GENERATED_UCLASS_BODY()
 
 public:
 
-	virtual void Tick(float DeltaSeconds) override;
+	UE_API virtual void Tick(float DeltaSeconds) override;
 
 	// ------------------------------
 
-	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
+	UE_API virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
 
-	void InitializeReticle(AGameplayAbilityTargetActor* InTargetingActor, APlayerController* PlayerController, FWorldReticleParameters InParameters);
+	UE_API void InitializeReticle(AGameplayAbilityTargetActor* InTargetingActor, APlayerController* PlayerController, FWorldReticleParameters InParameters);
 
-	void SetIsTargetValid(bool bNewValue);
-	void SetIsTargetAnActor(bool bNewValue);
+	UE_API void SetIsTargetValid(bool bNewValue);
+	UE_API void SetIsTargetAnActor(bool bNewValue);
 
 	/** Called whenever bIsTargetValid changes value. */
 	UFUNCTION(BlueprintImplementableEvent, Category = Reticle)
-	void OnValidTargetChanged(bool bNewValue);
+	UE_API void OnValidTargetChanged(bool bNewValue);
 
 	/** Called whenever bIsTargetAnActor changes value. */
 	UFUNCTION(BlueprintImplementableEvent, Category = Reticle)
-	void OnTargetingAnActor(bool bNewValue);
+	UE_API void OnTargetingAnActor(bool bNewValue);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = Reticle)
-	void OnParametersInitialized();
+	UE_API void OnParametersInitialized();
 
 	UFUNCTION(BlueprintImplementableEvent, Category = Reticle)
-	void SetReticleMaterialParamFloat(FName ParamName, float value);
+	UE_API void SetReticleMaterialParamFloat(FName ParamName, float value);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = Reticle)
-	void SetReticleMaterialParamVector(FName ParamName, FVector value);
+	UE_API void SetReticleMaterialParamVector(FName ParamName, FVector value);
 
 	UFUNCTION(BlueprintCallable, Category = Reticle)
-	void FaceTowardSource(bool bFaceIn2D);
+	UE_API void FaceTowardSource(bool bFaceIn2D);
 
 	UPROPERTY(EditInstanceOnly, BlueprintReadWrite, meta = (ExposeOnSpawn = "true"), Category = "Reticle")
 	FWorldReticleParameters Parameters;
@@ -97,3 +99,5 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Network")
 	TObjectPtr<AGameplayAbilityTargetActor> TargetingActor;
 };
+
+#undef UE_API

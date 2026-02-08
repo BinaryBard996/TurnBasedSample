@@ -11,6 +11,8 @@
 #include "GameplayEffect.h"
 #include "GameplayTagResponseTable.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
 USTRUCT()
@@ -56,8 +58,8 @@ struct FGameplayTagResponseTableEntry
  *	For example, "for every count of "Status.Haste" I get 1 level of GE_Response_Haste. This class facilitates
  *	building this table and automatically registering and responding to tag events on the ability system component.
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UGameplayTagReponseTable : public UDataAsset
+UCLASS(MinimalAPI)
+class UGameplayTagReponseTable : public UDataAsset
 {
 	GENERATED_UCLASS_BODY()
 
@@ -67,14 +69,14 @@ class GAMEPLAYABILITIES_API UGameplayTagReponseTable : public UDataAsset
 	/** Registers for tag events for the given ability system component. Note this will happen to every spawned ASC, we may want to allow games
 	 *	to limit what classe this is called on, or potentially build into the table class restrictions for each response entry.
 	 */
-	void RegisterResponseForEvents(UAbilitySystemComponent* ASC);
+	UE_API void RegisterResponseForEvents(UAbilitySystemComponent* ASC);
 
-	virtual void PostLoad() override;
+	UE_API virtual void PostLoad() override;
 
 protected:
 
 	UFUNCTION()
-	void TagResponseEvent(const FGameplayTag Tag, int32 NewCount, UAbilitySystemComponent* ASC, int32 idx);
+	UE_API void TagResponseEvent(const FGameplayTag Tag, int32 NewCount, UAbilitySystemComponent* ASC, int32 idx);
 	
 	/** Temporary structs to avoid extra heap allocations every time we recalculate tag count */
 	mutable FGameplayEffectQuery Query;
@@ -97,9 +99,11 @@ protected:
 
 	float LastASCPurgeTime;
 
-	void Remove(UAbilitySystemComponent* ASC, TArray<FActiveGameplayEffectHandle>& Handles);
+	UE_API void Remove(UAbilitySystemComponent* ASC, TArray<FActiveGameplayEffectHandle>& Handles);
 
-	void AddOrUpdate(UAbilitySystemComponent* ASC, const TArray<TSubclassOf<UGameplayEffect> >& ResponseGameplayEffects, int32 TotalCount, TArray<FActiveGameplayEffectHandle>& Handles);
+	UE_API void AddOrUpdate(UAbilitySystemComponent* ASC, const TArray<TSubclassOf<UGameplayEffect> >& ResponseGameplayEffects, int32 TotalCount, TArray<FActiveGameplayEffectHandle>& Handles);
 
-	int32 GetCount(const FGameplayTagReponsePair& Pair, UAbilitySystemComponent* ASC) const;
+	UE_API int32 GetCount(const FGameplayTagReponsePair& Pair, UAbilitySystemComponent* ASC) const;
 };
+
+#undef UE_API

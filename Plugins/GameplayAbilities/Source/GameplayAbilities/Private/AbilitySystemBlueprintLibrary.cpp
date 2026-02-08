@@ -14,6 +14,61 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AbilitySystemBlueprintLibrary)
 
+FGameplayTagChangedEventWrapperSpecHandle::FGameplayTagChangedEventWrapperSpecHandle()
+	: Data(nullptr)
+{
+}
+
+FGameplayTagChangedEventWrapperSpecHandle::FGameplayTagChangedEventWrapperSpecHandle(FGameplayTagChangedEventWrapperSpec* DataPtr)
+	: Data(DataPtr)
+{
+}
+
+bool FGameplayTagChangedEventWrapperSpecHandle::operator==(FGameplayTagChangedEventWrapperSpecHandle const& Other) const
+{
+	const bool bBothValid = Data.IsValid() && Other.Data.IsValid();
+	const bool bBothInvalid = !Data.IsValid() && !Other.Data.IsValid();
+	return (bBothInvalid || (bBothValid && (Data.Get() == Other.Data.Get())));
+}
+
+bool FGameplayTagChangedEventWrapperSpecHandle::operator!=(FGameplayTagChangedEventWrapperSpecHandle const& Other) const
+{
+	return !(FGameplayTagChangedEventWrapperSpecHandle::operator==(Other));
+}
+
+FGameplayTagChangedEventWrapperSpec::FGameplayTagChangedEventWrapperSpec(
+	UAbilitySystemComponent* AbilitySystemComponent, 
+	FOnGameplayTagChangedEventWrapperSignature InGameplayTagChangedEventWrapperDelegate, 
+	EGameplayTagEventType::Type InTagListeningPolicy)
+	: AbilitySystemComponentWk(AbilitySystemComponent)
+	, GameplayTagChangedEventWrapperDelegate(InGameplayTagChangedEventWrapperDelegate)
+	, TagListeningPolicy(InTagListeningPolicy)
+	, DelegateBindings{}
+{
+}
+
+FGameplayTagChangedEventWrapperSpec::~FGameplayTagChangedEventWrapperSpec()
+{
+	const int32 RemainingDelegateBindingsCount = DelegateBindings.Num();
+	if (RemainingDelegateBindingsCount > 0)
+	{
+		// We still have delegates bound to the ASC - we need to warn the user!
+		// We expect the user to unbind delegates they bound.
+
+		// The exception is if the ASC itself is not valid which indicates things are tearing down - in that case, we'll give them a pass since it's a moot point that
+		//  we are still bound if the ASC isn't around anymore.
+		UAbilitySystemComponent* AbilitySystemComponent = AbilitySystemComponentWk.Get();
+		if (IsValid(AbilitySystemComponent))
+		{
+			ABILITY_LOG(
+				Error, 
+				TEXT("~FGameplayTagChangedEventWrapperSpec: our bound spec is being destroyed but we still have %d delegate bindings bound to the ASC on '%s'! Please cache off the Bound delegate handle and unbind it when finished."),
+				RemainingDelegateBindingsCount,
+				*GetNameSafe(AbilitySystemComponent->GetOwner()));
+		}
+	}
+}
+
 UAbilitySystemBlueprintLibrary::UAbilitySystemBlueprintLibrary(const FObjectInitializer& ObjectInitializer)
 : Super(ObjectInitializer)
 {
@@ -47,6 +102,159 @@ void UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(AActor* Actor, FGa
 			ABILITY_LOG(Error, TEXT("UAbilitySystemBlueprintLibrary::SendGameplayEventToActor: Invalid ability system component retrieved from Actor %s. EventTag was %s"), *Actor->GetName(), *EventTag.ToString());
 		}
 	}
+}
+
+FGameplayTagChangedEventWrapperSpecHandle UAbilitySystemBlueprintLibrary::BindEventWrapperToGameplayTagChanged(
+	UAbilitySystemComponent* AbilitySystemComponent,
+	FGameplayTag Tag, 
+	FOnGameplayTagChangedEventWrapperSignature GameplayTagChangedEventWrapperDelegate, 
+	bool bExecuteImmediatelyIfTagApplied /*= true*/, 
+	EGameplayTagEventType::Type TagListeningPolicy /*= EGameplayTagEventType::NewOrRemoved*/)
+{
+	if (!::IsValid(AbilitySystemComponent))
+	{
+		return FGameplayTagChangedEventWrapperSpecHandle();
+	}
+
+	FGameplayTagChangedEventWrapperSpec* TagBindingSpec = new FGameplayTagChangedEventWrapperSpec(AbilitySystemComponent, GameplayTagChangedEventWrapperDelegate, TagListeningPolicy);
+	FGameplayTagChangedEventWrapperSpecHandle TagBindingHandle(TagBindingSpec);
+
+	// Bind to the ASC's tag change listening delegate (which is not a 'dynamic' delegate and thereby can't be used in BP).
+	const FDelegateHandle TagChangedDelegateHandle = AbilitySystemComponent->RegisterGameplayTagEvent(Tag, TagListeningPolicy).AddLambda(
+		[GameplayTagChangedEventWrapperDelegate]
+		(const FGameplayTag GameplayTag, int32 GameplayTagCount)
+	{
+		UAbilitySystemBlueprintLibrary::ProcessGameplayTagChangedEventWrapper(GameplayTag, GameplayTagCount, GameplayTagChangedEventWrapperDelegate);
+	});
+
+	TagBindingSpec->DelegateBindings.Add(Tag, TagChangedDelegateHandle);
+
+	if (bExecuteImmediatelyIfTagApplied)
+	{
+		const int32 GameplayTagCount = AbilitySystemComponent->GetGameplayTagCount(Tag);
+		if (GameplayTagCount > 0)
+		{
+			GameplayTagChangedEventWrapperDelegate.ExecuteIfBound(Tag, GameplayTagCount);
+		}
+	}
+	
+	return TagBindingHandle;
+}
+
+FGameplayTagChangedEventWrapperSpecHandle UAbilitySystemBlueprintLibrary::BindEventWrapperToAnyOfGameplayTagsChanged(
+	UAbilitySystemComponent* AbilitySystemComponent,
+	const TArray<FGameplayTag>& Tags, 
+	FOnGameplayTagChangedEventWrapperSignature GameplayTagChangedEventWrapperDelegate, 
+	bool bExecuteImmediatelyIfTagApplied/* = true*/,
+	EGameplayTagEventType::Type TagListeningPolicy/* = EGameplayTagEventType::NewOrRemoved*/)
+{
+	if (!::IsValid(AbilitySystemComponent))
+	{
+		return FGameplayTagChangedEventWrapperSpecHandle();
+	}
+
+	FGameplayTagChangedEventWrapperSpec* TagBindingSpec = new FGameplayTagChangedEventWrapperSpec(AbilitySystemComponent, GameplayTagChangedEventWrapperDelegate, TagListeningPolicy);
+	FGameplayTagChangedEventWrapperSpecHandle TagBindingHandle(TagBindingSpec);
+
+	TagBindingSpec->DelegateBindings.Reserve(Tags.Num());
+
+	// Bind each tag and add to the DelegateBindings container.
+	for (const FGameplayTag& Tag : Tags)
+	{
+		// Bind to the ASC's tag change listening delegate (which is not a 'dynamic' delegate and thereby can't be used in BP).
+		const FDelegateHandle TagChangedDelegateHandle = AbilitySystemComponent->RegisterGameplayTagEvent(Tag, TagListeningPolicy).AddLambda(
+			[GameplayTagChangedEventWrapperDelegate]
+			(const FGameplayTag GameplayTag, int32 GameplayTagCount)
+		{
+			UAbilitySystemBlueprintLibrary::ProcessGameplayTagChangedEventWrapper(GameplayTag, GameplayTagCount, GameplayTagChangedEventWrapperDelegate);
+		});
+
+		TagBindingSpec->DelegateBindings.Add(Tag, TagChangedDelegateHandle);
+	}
+
+	if (bExecuteImmediatelyIfTagApplied)
+	{
+		for (const FGameplayTag& Tag : Tags)
+		{
+			const int32 GameplayTagCount = AbilitySystemComponent->GetGameplayTagCount(Tag);
+			if (GameplayTagCount > 0)
+			{
+				GameplayTagChangedEventWrapperDelegate.ExecuteIfBound(Tag, GameplayTagCount);
+			}
+		}
+	}
+
+	return TagBindingHandle;
+}
+
+FGameplayTagChangedEventWrapperSpecHandle UAbilitySystemBlueprintLibrary::BindEventWrapperToAnyOfGameplayTagContainerChanged(
+	UAbilitySystemComponent* AbilitySystemComponent,
+	const FGameplayTagContainer TagContainer, 
+	FOnGameplayTagChangedEventWrapperSignature GameplayTagChangedEventWrapperDelegate, 
+	bool bExecuteImmediatelyIfTagApplied/* = true*/,
+	EGameplayTagEventType::Type TagListeningPolicy/* = EGameplayTagEventType::NewOrRemoved*/)
+{
+	TArray<FGameplayTag> Tags;
+	TagContainer.GetGameplayTagArray(Tags);
+	
+	return BindEventWrapperToAnyOfGameplayTagsChanged(AbilitySystemComponent, Tags, GameplayTagChangedEventWrapperDelegate, bExecuteImmediatelyIfTagApplied, TagListeningPolicy);
+}
+
+void UAbilitySystemBlueprintLibrary::UnbindAllGameplayTagChangedEventWrappersForHandle(FGameplayTagChangedEventWrapperSpecHandle Handle)
+{
+	FGameplayTagChangedEventWrapperSpec* GameplayTagChangedEventDataPtr = Handle.Data.Get();
+	if (GameplayTagChangedEventDataPtr == nullptr)
+	{
+		return;
+	}
+
+	UAbilitySystemComponent* AbilitySystemComponent = GameplayTagChangedEventDataPtr->AbilitySystemComponentWk.Get();
+	if (AbilitySystemComponent == nullptr)
+	{
+		return;
+	}
+
+	for (auto Iterator = GameplayTagChangedEventDataPtr->DelegateBindings.CreateConstIterator(); Iterator; ++Iterator)
+	{
+		AbilitySystemComponent->UnregisterGameplayTagEvent(Iterator->Value, Iterator->Key, GameplayTagChangedEventDataPtr->TagListeningPolicy);
+	}
+
+	GameplayTagChangedEventDataPtr->DelegateBindings.Reset();
+}
+
+void UAbilitySystemBlueprintLibrary::UnbindGameplayTagChangedEventWrapperForHandle(FGameplayTag Tag, FGameplayTagChangedEventWrapperSpecHandle Handle)
+{
+	FGameplayTagChangedEventWrapperSpec* GameplayTagChangedEventDataPtr = Handle.Data.Get();
+	if (GameplayTagChangedEventDataPtr == nullptr)
+	{
+		return;
+	}
+
+	UAbilitySystemComponent* AbilitySystemComponent = GameplayTagChangedEventDataPtr->AbilitySystemComponentWk.Get();
+	if (AbilitySystemComponent == nullptr)
+	{
+		return;
+	}
+
+	for (auto DelegateBindingIterator = GameplayTagChangedEventDataPtr->DelegateBindings.CreateIterator(); DelegateBindingIterator; ++DelegateBindingIterator)
+	{
+		const FGameplayTag& BoundTag = DelegateBindingIterator->Key;
+		if (!BoundTag.MatchesTagExact(Tag))
+		{
+			continue;
+		}
+
+		AbilitySystemComponent->UnregisterGameplayTagEvent(DelegateBindingIterator->Value, BoundTag, GameplayTagChangedEventDataPtr->TagListeningPolicy);
+		DelegateBindingIterator.RemoveCurrent();
+	}
+}
+
+void UAbilitySystemBlueprintLibrary::ProcessGameplayTagChangedEventWrapper(
+	const FGameplayTag GameplayTag, 
+	int32 GameplayTagCount,
+	FOnGameplayTagChangedEventWrapperSignature GameplayTagChangedEventWrapperDelegate)
+{
+	GameplayTagChangedEventWrapperDelegate.ExecuteIfBound(GameplayTag, GameplayTagCount);
 }
 
 bool UAbilitySystemBlueprintLibrary::IsValid(FGameplayAttribute Attribute)
@@ -238,7 +446,7 @@ FGameplayAbilityTargetDataHandle UAbilitySystemBlueprintLibrary::FilterTargetDat
 				FGameplayAbilityTargetData* NewData = (FGameplayAbilityTargetData*)FMemory::Malloc(ScriptStruct->GetCppStructOps()->GetSize());
 				ScriptStruct->InitializeStruct(NewData);
 				ScriptStruct->CopyScriptStruct(NewData, UnfilteredData);
-				ReturnDataHandle.Data.Add(TSharedPtr<FGameplayAbilityTargetData>(NewData));
+				ReturnDataHandle.Data.Add(TSharedPtr<FGameplayAbilityTargetData>(NewData, FGameplayAbilityTargetDataDeleter()));
 				if (FilteredActors.Num() < UnfilteredActors.Num())
 				{
 					//We have lost some, but not all, of our actors, so replace the array. This should only be possible with targeting types that permit actor-array setting.
@@ -853,6 +1061,17 @@ FGameplayEffectSpecHandle UAbilitySystemBlueprintLibrary::AddGrantedTags(FGamepl
 	return SpecHandle;
 }
 
+FGameplayTagContainer UAbilitySystemBlueprintLibrary::GetGrantedTags(FGameplayEffectSpecHandle SpecHandle)
+{
+	FGameplayTagContainer AllGrantedTags;
+	FGameplayEffectSpec* Spec = SpecHandle.Data.Get();
+	if (Spec)
+	{
+		Spec->GetAllGrantedTags(AllGrantedTags);
+	}
+	return AllGrantedTags;
+}
+
 FGameplayEffectSpecHandle UAbilitySystemBlueprintLibrary::AddAssetTag(FGameplayEffectSpecHandle SpecHandle, FGameplayTag NewGameplayTag)
 {
 	FGameplayEffectSpec* Spec = SpecHandle.Data.Get();
@@ -881,6 +1100,17 @@ FGameplayEffectSpecHandle UAbilitySystemBlueprintLibrary::AddAssetTags(FGameplay
 	}
 
 	return SpecHandle;
+}
+
+FGameplayTagContainer UAbilitySystemBlueprintLibrary::GetAssetTags(FGameplayEffectSpecHandle SpecHandle)
+{
+	FGameplayTagContainer AllAssetTags;
+	FGameplayEffectSpec* Spec = SpecHandle.Data.Get();
+	if (Spec)
+	{
+		Spec->GetAllAssetTags(AllAssetTags);
+	}
+	return AllAssetTags;
 }
 	
 FGameplayEffectSpecHandle UAbilitySystemBlueprintLibrary::AddLinkedGameplayEffectSpec(FGameplayEffectSpecHandle SpecHandle, FGameplayEffectSpecHandle LinkedGameplayEffectSpec)
@@ -981,6 +1211,21 @@ PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	TArray<FGameplayEffectSpecHandle> Handles;
 	return Handles;
 PRAGMA_ENABLE_DEPRECATION_WARNINGS
+}
+
+bool UAbilitySystemBlueprintLibrary::IsActiveGameplayEffectHandleValid(FActiveGameplayEffectHandle Handle)
+{
+	return Handle.IsValid();
+}
+
+bool UAbilitySystemBlueprintLibrary::IsActiveGameplayEffectHandleActive(FActiveGameplayEffectHandle Handle)
+{
+	return Handle.IsValid() && Handle.GetOwningAbilitySystemComponent() && Handle.GetOwningAbilitySystemComponent()->GetActiveGameplayEffect(Handle) != nullptr;
+}
+
+UAbilitySystemComponent* UAbilitySystemBlueprintLibrary::GetAbilitySystemComponentFromActiveGameplayEffectHandle(FActiveGameplayEffectHandle Handle)
+{
+	return Handle.GetOwningAbilitySystemComponent();
 }
 
 int32 UAbilitySystemBlueprintLibrary::GetActiveGameplayEffectStackCount(FActiveGameplayEffectHandle ActiveHandle)
@@ -1103,12 +1348,7 @@ bool UAbilitySystemBlueprintLibrary::AddLooseGameplayTags(AActor* Actor, const F
 {
 	if (UAbilitySystemComponent* AbilitySysComp = GetAbilitySystemComponent(Actor))
 	{
-		AbilitySysComp->AddLooseGameplayTags(GameplayTags);
-
-		if (bShouldReplicate)
-		{
-			AbilitySysComp->AddReplicatedLooseGameplayTags(GameplayTags);
-		}
+		AbilitySysComp->AddLooseGameplayTags(GameplayTags, 1, bShouldReplicate ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::None);
 
 		return true;
 	}
@@ -1120,17 +1360,63 @@ bool UAbilitySystemBlueprintLibrary::RemoveLooseGameplayTags(AActor* Actor, cons
 {
 	if (UAbilitySystemComponent* AbilitySysComp = GetAbilitySystemComponent(Actor))
 	{
-		AbilitySysComp->RemoveLooseGameplayTags(GameplayTags);
-
-		if (bShouldReplicate)
-		{
-			AbilitySysComp->RemoveReplicatedLooseGameplayTags(GameplayTags);
-		}
+		AbilitySysComp->RemoveLooseGameplayTags(GameplayTags, 1, bShouldReplicate ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::None);
 
 		return true;
 	}
 
 	return false;
+}
+
+bool UAbilitySystemBlueprintLibrary::AddGameplayTags(AActor* Actor, const FGameplayTagContainer& GameplayTags, EGameplayTagReplicationState ReplicationRule)
+{
+	if (UAbilitySystemComponent* AbilitySysComp = GetAbilitySystemComponent(Actor))
+	{
+		AbilitySysComp->AddLooseGameplayTags(GameplayTags, 1, ReplicationRule);
+
+		return true;
+	}
+
+	return false;
+}
+
+bool UAbilitySystemBlueprintLibrary::RemoveGameplayTags(AActor* Actor, const FGameplayTagContainer& GameplayTags, EGameplayTagReplicationState ReplicationRule)
+{
+	if (UAbilitySystemComponent* AbilitySysComp = GetAbilitySystemComponent(Actor))
+	{
+		AbilitySysComp->RemoveLooseGameplayTags(GameplayTags, 1, ReplicationRule);
+
+		return true;
+	}
+
+	return false;
+}
+
+const UGameplayEffect* UAbilitySystemBlueprintLibrary::GetGameplayEffectFromSpecHandle(FGameplayEffectSpecHandle Handle)
+{
+	return Handle.Data ? Handle.Data->Def.Get() : nullptr;
+}
+
+bool UAbilitySystemBlueprintLibrary::IsDurationGameplayEffectSpecHandle(FGameplayEffectSpecHandle Handle)
+{
+	if (Handle.Data && Handle.Data->Def)
+	{
+		return Handle.Data->Def->DurationPolicy != EGameplayEffectDurationType::Instant;
+	}
+
+	ABILITY_LOG(Warning, TEXT("IsDurationGameplayEffectSpecHandle called on invalid handle"));
+	return false;
+}
+
+EGameplayEffectDurationType UAbilitySystemBlueprintLibrary::GetDurationPolicyFromGameplayEffectSpecHandle(FGameplayEffectSpecHandle Handle)
+{
+	if (Handle.Data && Handle.Data->Def)
+	{
+		return Handle.Data->Def->DurationPolicy;
+	}
+
+	ABILITY_LOG(Warning, TEXT("GetDurationPolicyFromGameplayEffectSpecHandle called on invalid handle"));
+	return EGameplayEffectDurationType::Instant;
 }
 
 const UGameplayEffectUIData* UAbilitySystemBlueprintLibrary::GetGameplayEffectUIData(TSubclassOf<UGameplayEffect> EffectClass, TSubclassOf<UGameplayEffectUIData> DataType)
@@ -1251,6 +1537,68 @@ bool UAbilitySystemBlueprintLibrary::IsGameplayAbilityActive(const UGameplayAbil
 	return GameplayAbility->IsActive();
 }
 
+bool UAbilitySystemBlueprintLibrary::HasAnyAbilitiesByPredicate(
+	const UAbilitySystemComponent* AbilitySystemComponent, 
+	const TFunctionRef<bool(const UGameplayAbility& AbilityRef)> Predicate, 
+	bool bOnlyRunPredicateOnAbilityCDOs /*= false*/)
+{
+	if (AbilitySystemComponent == nullptr)
+	{
+		return false;
+	}
+
+	// Copy off the ActivatableAbilities for safety to avoid situations where the Predicate is affecting the list while iterating.
+	TArray<FGameplayAbilitySpec> ActivatableAbilitiesCopy = AbilitySystemComponent->GetActivatableAbilities();
+	for (const FGameplayAbilitySpec& Spec : ActivatableAbilitiesCopy)
+	{
+		if (Spec.Ability == nullptr)
+		{
+			continue;
+		}
+
+		TArray<UGameplayAbility*> AbilitiesToCheck;
+
+		if (!bOnlyRunPredicateOnAbilityCDOs && Spec.Ability->GetInstancingPolicy() != EGameplayAbilityInstancingPolicy::NonInstanced)
+		{
+			AbilitiesToCheck.Append(Spec.GetAbilityInstances());
+		}
+		else
+		{
+			AbilitiesToCheck.Add(Spec.Ability);
+		}
+
+		for (UGameplayAbility* AbilityToCheck : AbilitiesToCheck)
+		{
+			if (AbilityToCheck == nullptr)
+			{
+				continue;
+			}
+
+			const bool bPassesCondition = Predicate(*AbilityToCheck);
+			if (bPassesCondition)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool UAbilitySystemBlueprintLibrary::HasAnyAbilitiesWithAssetTag(const UAbilitySystemComponent* AbilitySystemComponent, FGameplayTag AssetTag)
+{
+	if (AbilitySystemComponent == nullptr)
+	{
+		return false;
+	}
+
+	constexpr bool bOnlyCheckAbilityCDO = true;
+	return HasAnyAbilitiesByPredicate(AbilitySystemComponent, [AssetTag](const UGameplayAbility& AbilityRef) -> bool
+	{
+		return AbilityRef.GetAssetTags().HasTag(AssetTag);
+	}, bOnlyCheckAbilityCDO);
+}
+
 bool UAbilitySystemBlueprintLibrary::EqualEqual_GameplayAbilitySpecHandle(const FGameplayAbilitySpecHandle& A, const FGameplayAbilitySpecHandle& B)
 {
 	return A == B;
@@ -1259,6 +1607,16 @@ bool UAbilitySystemBlueprintLibrary::EqualEqual_GameplayAbilitySpecHandle(const 
 bool UAbilitySystemBlueprintLibrary::NotEqual_GameplayAbilitySpecHandle(const FGameplayAbilitySpecHandle& A, const FGameplayAbilitySpecHandle& B)
 {
 	return A != B;
+}
+
+float UAbilitySystemBlueprintLibrary::Conv_ScalableFloatToFloat(const FScalableFloat& Input, float Level)
+{
+	return Input.GetValueAtLevel(Level);
+}
+
+double UAbilitySystemBlueprintLibrary::Conv_ScalableFloatToDouble(const FScalableFloat& Input, float Level)
+{
+	return static_cast<double>(Input.GetValueAtLevel(Level));
 }
 
 void UAbilitySystemBlueprintLibrary::TickTurn(UAbilitySystemComponent* AbilitySystemComponent, int32 Delta)

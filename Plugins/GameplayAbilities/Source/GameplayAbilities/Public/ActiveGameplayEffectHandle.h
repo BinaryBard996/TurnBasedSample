@@ -4,6 +4,8 @@
 
 #include "ActiveGameplayEffectHandle.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
 /**
@@ -12,7 +14,7 @@ class UAbilitySystemComponent;
  *	through a handle. a pointer or index into the active list is not sufficient. These are not synchronized between clients and server.
  */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FActiveGameplayEffectHandle
+struct FActiveGameplayEffectHandle
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -41,16 +43,16 @@ struct GAMEPLAYABILITIES_API FActiveGameplayEffectHandle
 	}
 
 	/** Creates a new handle, will be set to successfully applied */
-	static FActiveGameplayEffectHandle GenerateNewHandle(UAbilitySystemComponent* OwningComponent);
+	static UE_API FActiveGameplayEffectHandle GenerateNewHandle(UAbilitySystemComponent* OwningComponent);
 
 	/** Resets the map that supports GetOwningAbilitySystemComponent */
-	static void ResetGlobalHandleMap();
+	static UE_API void ResetGlobalHandleMap();
 
 	/** Returns the ability system component that created this handle */
-	UAbilitySystemComponent* GetOwningAbilitySystemComponent() const;
+	UE_API UAbilitySystemComponent* GetOwningAbilitySystemComponent() const;
 
 	/** Remove this from the GetOwningAbilitySystemComponent map */
-	void RemoveFromGlobalMap();
+	UE_API void RemoveFromGlobalMap();
 
 	bool operator==(const FActiveGameplayEffectHandle& Other) const
 	{
@@ -85,3 +87,5 @@ private:
 	UPROPERTY()
 	bool bPassedFiltersAndWasExecuted;
 };
+
+#undef UE_API

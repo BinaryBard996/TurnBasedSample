@@ -8,6 +8,8 @@
 #include "GameFramework/Actor.h"
 #include "GameplayAbilityTargetDataFilter.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 /** Set rather it is possible to target self */
 UENUM(BlueprintType)
 namespace ETargetDataFilterSelf
@@ -22,7 +24,7 @@ namespace ETargetDataFilterSelf
 
 /** Simple actor target filter, games can subclass this */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayTargetDataFilter
+struct FGameplayTargetDataFilter
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -61,7 +63,7 @@ struct GAMEPLAYABILITIES_API FGameplayTargetDataFilter
 	}
 
 	/** Initializes SelfActor */
-	void InitializeFilterContext(AActor* FilterActor);
+	UE_API void InitializeFilterContext(AActor* FilterActor);
 
 	/** Actor we're comparing against. */
 	UPROPERTY()
@@ -82,7 +84,7 @@ struct GAMEPLAYABILITIES_API FGameplayTargetDataFilter
 
 /** Polymorphic handle to filter structure that handles checking if actors should be targeted */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayTargetDataFilterHandle
+struct FGameplayTargetDataFilterHandle
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -123,3 +125,5 @@ struct GAMEPLAYABILITIES_API FGameplayTargetDataFilterHandle
 		return FilterPassesForActor(ActorToBeFiltered);
 	}
 };
+
+#undef UE_API

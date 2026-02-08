@@ -44,7 +44,7 @@ void UAbilityTask_WaitTargetData::Activate()
 			RegisterTargetDataCallbacks();
 
 
-			if (!IsValid(this))
+			if (!IsValidChecked(this))
 			{
 				return;
 			}
@@ -178,7 +178,7 @@ void UAbilityTask_WaitTargetData::FinalizeTargetActor(AGameplayAbilityTargetActo
 
 void UAbilityTask_WaitTargetData::RegisterTargetDataCallbacks()
 {
-	if (!ensure(IsValid(this)))
+	if (!ensure(IsValidChecked(this)))
 	{
 		return;
 	}

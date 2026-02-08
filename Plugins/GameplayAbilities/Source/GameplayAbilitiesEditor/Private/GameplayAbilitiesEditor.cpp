@@ -81,11 +81,8 @@ FText FGameplayAbilitiesEditor::GetToolkitName() const
 
 	const UObject* EditingObject = EditingObjs[0];
 
-	const bool bDirtyState = EditingObject->GetOutermost()->IsDirty();
-
 	Args.Add(TEXT("ObjectName"), FText::FromString(EditingObject->GetName()));
-	Args.Add(TEXT("DirtyState"), bDirtyState ? FText::FromString(TEXT("*")) : FText::GetEmpty());
-	return FText::Format(LOCTEXT("GameplayAbilitiesToolkitName", "{ObjectName}{DirtyState}"), Args);
+	return FText::Format(LOCTEXT("GameplayAbilitiesToolkitName", "{ObjectName}"), Args);
 }
 
 FText FGameplayAbilitiesEditor::GetToolkitToolTipText() const

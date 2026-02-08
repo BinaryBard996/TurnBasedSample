@@ -11,6 +11,8 @@
 #include "GameplayEffect.h"
 #include "GameplayCue_Types.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class AGameplayCueNotify_Actor;
 class UAbilitySystemComponent;
 class UGameplayCueSet;
@@ -116,7 +118,7 @@ struct UE_DEPRECATED(5.3, "Look at FGCNotifyActorKey constructor notes for upgra
 	FObjectKey	OptionalSourceObject;
 	FObjectKey	CueClass;
 
-	FORCEINLINE bool operator==(const FGCNotifyActorKey& Other) const
+	inline bool operator==(const FGCNotifyActorKey& Other) const
 	{
 		return TargetActor == Other.TargetActor && CueClass == Other.CueClass &&
 				OptionalInstigatorActor == Other.OptionalInstigatorActor && OptionalSourceObject == Other.OptionalSourceObject;
@@ -124,7 +126,7 @@ struct UE_DEPRECATED(5.3, "Look at FGCNotifyActorKey constructor notes for upgra
 };
 
 PRAGMA_DISABLE_DEPRECATION_WARNINGS
-FORCEINLINE uint32 GetTypeHash(const FGCNotifyActorKey& Key)
+inline uint32 GetTypeHash(const FGCNotifyActorKey& Key)
 {
 	return GetTypeHash(Key.TargetActor)	^
 			GetTypeHash(Key.OptionalInstigatorActor) ^
@@ -137,11 +139,13 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
  *	FScopedGameplayCueSendContext
  *	Add this around code that sends multiple gameplay cues to allow grouping them into a smalkler number of cues for more efficient networking
  */
-struct GAMEPLAYABILITIES_API FScopedGameplayCueSendContext
+struct FScopedGameplayCueSendContext
 {
-	FScopedGameplayCueSendContext();
-	~FScopedGameplayCueSendContext();
+	UE_API FScopedGameplayCueSendContext();
+	UE_API ~FScopedGameplayCueSendContext();
 };
 
 /** Delegate for when GC notifies are added or removed from manager */
 DECLARE_MULTICAST_DELEGATE(FOnGameplayCueNotifyChange);
+
+#undef UE_API

@@ -6,9 +6,11 @@
 #include "GameplayEffectComponent.h"
 #include "AdditionalEffectsGameplayEffectComponent.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 /** Add additional Gameplay Effects that attempt to activate under certain conditions (or no conditions) */
-UCLASS(CollapseCategories, DisplayName="Apply Additional Effects")
-class GAMEPLAYABILITIES_API UAdditionalEffectsGameplayEffectComponent : public UGameplayEffectComponent
+UCLASS(CollapseCategories, DisplayName="Apply Additional Effects", MinimalAPI)
+class UAdditionalEffectsGameplayEffectComponent : public UGameplayEffectComponent
 {
 	GENERATED_BODY()
 
@@ -16,18 +18,18 @@ public:
 	/**
      * Called when a Gameplay Effect is Added to the ActiveGameplayEffectsContainer.  We register a callback to execute the OnComplete Gameplay Effects.
      */
-	virtual bool OnActiveGameplayEffectAdded(FActiveGameplayEffectsContainer& GEContainer, FActiveGameplayEffect& ActiveGE) const override;
+	UE_API virtual bool OnActiveGameplayEffectAdded(FActiveGameplayEffectsContainer& GEContainer, FActiveGameplayEffect& ActiveGE) const override;
 
 	/**
 	 * Called when a Gameplay Effect is applied.  This executes the OnApplication Gameplay Effects.
 	 */
-	virtual void OnGameplayEffectApplied(FActiveGameplayEffectsContainer& ActiveGEContainer, FGameplayEffectSpec& GESpec, FPredictionKey& PredictionKey) const override;
+	UE_API virtual void OnGameplayEffectApplied(FActiveGameplayEffectsContainer& ActiveGEContainer, FGameplayEffectSpec& GESpec, FPredictionKey& PredictionKey) const override;
 
 #if WITH_EDITOR
 	/**
 	 * There are some fields that are incompatible with one another, so let's catch them during configuration phase. 
 	 */
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	UE_API virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif // WITH_EDITOR
 
 
@@ -35,7 +37,7 @@ protected:
 	/**
 	 * Whenever the ActiveGE gets removed, we want to apply the configured OnComplete GameplayEffects
 	 */
-	void OnActiveGameplayEffectRemoved(const FGameplayEffectRemovalInfo& RemovalInfo, FActiveGameplayEffectsContainer* ActiveGEContainer) const;
+	UE_API void OnActiveGameplayEffectRemoved(const FGameplayEffectRemovalInfo& RemovalInfo, FActiveGameplayEffectsContainer* ActiveGEContainer) const;
 
 public:
 	/**
@@ -61,3 +63,5 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = OnComplete)
 	TArray<TSubclassOf<UGameplayEffect>> OnCompletePrematurely;
 };
+
+#undef UE_API

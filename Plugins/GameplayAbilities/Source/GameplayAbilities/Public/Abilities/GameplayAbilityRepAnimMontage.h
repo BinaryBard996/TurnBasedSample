@@ -5,6 +5,8 @@
 #include "GameplayPrediction.h"
 #include "GameplayAbilityRepAnimMontage.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAnimMontage;
 class UAnimSequenceBase;
 
@@ -18,7 +20,7 @@ enum class ERepAnimPositionMethod
 
 /** Data about montages that is replicated to simulated clients */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayAbilityRepAnimMontage
+struct FGameplayAbilityRepAnimMontage
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -45,6 +47,10 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityRepAnimMontage
 	/** Optional blend out used by dynamic montages. */
 	UPROPERTY(NotReplicated)
 	float BlendOutTime;
+
+	/** Fractional loop count for non-montages */
+	UPROPERTY()
+	float PlayCount;
 
 	/** NextSectionID */
 	UPROPERTY()
@@ -84,6 +90,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityRepAnimMontage
 	Position(0.f),
 	BlendTime(0.f),
 	BlendOutTime(0.f),
+	PlayCount(0.f),
 	NextSectionID(0),
 	PlayInstanceId(0),
 	bRepPosition(true),
@@ -94,11 +101,11 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityRepAnimMontage
 	{
 	}
 
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
-	void SetRepAnimPositionMethod(ERepAnimPositionMethod InMethod);
+	UE_API void SetRepAnimPositionMethod(ERepAnimPositionMethod InMethod);
 
-	UAnimMontage* GetAnimMontage() const;
+	UE_API UAnimMontage* GetAnimMontage() const;
 };
 
 template<>
@@ -109,3 +116,5 @@ struct TStructOpsTypeTraits<FGameplayAbilityRepAnimMontage> : public TStructOpsT
 		WithNetSerializer = true,
 	};
 };
+
+#undef UE_API

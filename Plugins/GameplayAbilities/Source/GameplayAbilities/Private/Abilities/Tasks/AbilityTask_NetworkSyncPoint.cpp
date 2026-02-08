@@ -75,7 +75,9 @@ void UAbilityTask_NetworkSyncPoint::Activate()
 
 void UAbilityTask_NetworkSyncPoint::SyncFinished()
 {
-	if (IsValid(this))
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	if (IsThisNotNull(this, "UAbilityTask_NetworkSyncPoint::SyncFinished") && IsValidChecked(this))
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	{
 		if (ShouldBroadcastAbilityTaskDelegates())
 		{

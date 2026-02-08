@@ -12,13 +12,13 @@
 #include "GameplayPrediction.h"
 #include "GameplayCueInterface.generated.h"
 
-#if UE_WITH_IRIS
+#define UE_API GAMEPLAYABILITIES_API
+
 struct FMinimalGameplayCueReplicationProxyForNetSerializer;
 namespace UE::Net
 {
 	class FMinimalGameplayCueReplicationProxyReplicationFragment;
 }
-#endif
 
 /** Interface for actors that wish to handle GameplayCue events from GameplayEffects. Native only because blueprints can't implement interfaces with native functions */
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))
@@ -27,35 +27,35 @@ class UGameplayCueInterface: public UInterface
 	GENERATED_UINTERFACE_BODY()
 };
 
-class GAMEPLAYABILITIES_API IGameplayCueInterface
+class IGameplayCueInterface
 {
 	GENERATED_IINTERFACE_BODY()
 
 public:
 
 	/** Handle a single gameplay cue */
-	virtual void HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual void HandleGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Wrapper that handles multiple cues */
-	virtual void HandleGameplayCues(UObject* Self, const FGameplayTagContainer& GameplayCueTags, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual void HandleGameplayCues(UObject* Self, const FGameplayTagContainer& GameplayCueTags, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/**
 	* Returns true if the object can currently accept gameplay cues associated with the given tag. Returns true by default.
 	* Allows objects to opt out of cues in cases such as pending death
 	*/
-	virtual bool ShouldAcceptGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual bool ShouldAcceptGameplayCue(UObject* Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 
 	// DEPRECATED - use the UObject* signatures above
 
 	/** Handle a single gameplay cue */
-	virtual void HandleGameplayCue(AActor *Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual void HandleGameplayCue(AActor *Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Wrapper that handles multiple cues */
-	virtual void HandleGameplayCues(AActor *Self, const FGameplayTagContainer& GameplayCueTags, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual void HandleGameplayCues(AActor *Self, const FGameplayTagContainer& GameplayCueTags, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Returns true if the actor can currently accept gameplay cues associated with the given tag. Returns true by default. Allows actors to opt out of cues in cases such as pending death */
-	virtual bool ShouldAcceptGameplayCue(AActor *Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual bool ShouldAcceptGameplayCue(AActor *Self, FGameplayTag GameplayCueTag, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	// END DEPRECATED
 
@@ -64,21 +64,21 @@ public:
 	virtual void GetGameplayCueSets(TArray<class UGameplayCueSet*>& OutSets) const {}
 
 	/** Default native handler, called if no tag matches found */
-	virtual void GameplayCueDefaultHandler(EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual void GameplayCueDefaultHandler(EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Internal function to map ufunctions directly to gameplaycue tags */
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCosmetic, Category = GameplayCue, meta = (BlueprintInternalUseOnly = "true"))
-	void BlueprintCustomHandler(EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API void BlueprintCustomHandler(EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Call from a Cue handler event to continue checking for additional, more generic handlers. Called from the ability system blueprint library */
 	UFUNCTION(BlueprintCallable, BlueprintCosmetic, Category="Ability|GameplayCue")
-	virtual void ForwardGameplayCueToParent();
+	UE_API virtual void ForwardGameplayCueToParent();
 
 	/** Calls the UFunction override for a specific gameplay cue */
-	static void DispatchBlueprintCustomHandler(UObject* Object, UFunction* Func, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	static UE_API void DispatchBlueprintCustomHandler(UObject* Object, UFunction* Func, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Clears internal cache of what classes implement which functions */
-	static void ClearTagToFunctionMap();
+	static UE_API void ClearTagToFunctionMap();
 
 	IGameplayCueInterface() : bForwardToParent(false) {}
 
@@ -128,41 +128,41 @@ struct FActiveGameplayCue : public FFastArraySerializerItem
 };
 
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FActiveGameplayCueContainer : public FFastArraySerializer
+struct FActiveGameplayCueContainer : public FFastArraySerializer
 {
 	GENERATED_USTRUCT_BODY()
 
 	UPROPERTY()
 	TArray< FActiveGameplayCue >	GameplayCues;
 
-	void SetOwner(UAbilitySystemComponent* InOwner);
-	UAbilitySystemComponent* GetOwner() const;
+	UE_API void SetOwner(UAbilitySystemComponent* InOwner);
+	UE_API UAbilitySystemComponent* GetOwner() const;
 
 	/** Should this container only replicate in minimal replication mode */
 	bool bMinimalReplication;
 
-	void AddCue(const FGameplayTag& Tag, const FPredictionKey& PredictionKey, const FGameplayCueParameters& Parameters);
-	void RemoveCue(const FGameplayTag& Tag);
+	UE_API void AddCue(const FGameplayTag& Tag, const FPredictionKey& PredictionKey, const FGameplayCueParameters& Parameters);
+	UE_API void RemoveCue(const FGameplayTag& Tag);
 
 	/** Marks as predictively removed so that we dont invoke remove event twice due to onrep */
-	void PredictiveRemove(const FGameplayTag& Tag);
+	UE_API void PredictiveRemove(const FGameplayTag& Tag);
 
-	void PredictiveAdd(const FGameplayTag& Tag, FPredictionKey& PredictionKey);
+	UE_API void PredictiveAdd(const FGameplayTag& Tag, FPredictionKey& PredictionKey);
 
 	/** Does explicit check for gameplay cue tag */
-	bool HasCue(const FGameplayTag& Tag) const;
+	UE_API bool HasCue(const FGameplayTag& Tag) const;
 
 	/** Returns true if the instance should be replicated. If false the property is allowed to be disabled for replication. */
-	bool ShouldReplicate() const;
+	UE_API bool ShouldReplicate() const;
 
-	bool NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParms);
+	UE_API bool NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParms);
 
 	// Will broadcast the OnRemove event for all currently active cues
-	void RemoveAllCues();
+	UE_API void RemoveAllCues();
 
 private:
 
-	int32 GetGameStateTime(const UWorld* World) const;
+	UE_API int32 GetGameStateTime(const UWorld* World) const;
 
 	UPROPERTY(NotReplicated)
 	TObjectPtr<class UAbilitySystemComponent>	Owner = nullptr;
@@ -204,23 +204,23 @@ struct FGameplayCueTag
  *	To use, put this on your replication proxy actor (such a the pawn). Call SetOwner, PreReplication and RemoveallCues in the appropriate places.
  */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FMinimalGameplayCueReplicationProxy
+struct FMinimalGameplayCueReplicationProxy
 {
 	GENERATED_BODY()
 
-	FMinimalGameplayCueReplicationProxy();
+	UE_API FMinimalGameplayCueReplicationProxy();
 
 	/** Set Owning ASC. This is what the GC callbacks are called on.  */
-	void SetOwner(UAbilitySystemComponent* ASC);
+	UE_API void SetOwner(UAbilitySystemComponent* ASC);
 
 	/** Copies data in from an FActiveGameplayCueContainer (such as the one of the ASC). You must call this manually from PreReplication. */
-	void PreReplication(const FActiveGameplayCueContainer& SourceContainer);
+	UE_API void PreReplication(const FActiveGameplayCueContainer& SourceContainer);
 
 	/** Custom NetSerialization to pack the entire array */
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	/** Will broadcast the OnRemove event for all currently active cues */
-	void RemoveAllCues();
+	UE_API void RemoveAllCues();
 
 	/** If true, we will skip updating the Owner ASC if we replicate on a connection owned by the ASC */
 	void SetRequireNonOwningNetConnection(bool b) { bRequireNonOwningNetConnection = b; }
@@ -235,10 +235,8 @@ struct GAMEPLAYABILITIES_API FMinimalGameplayCueReplicationProxy
 	bool operator!=(const FActiveGameplayCueContainer& Other) const { return !(*this == Other); }
 
 private:
-#if UE_WITH_IRIS
 	friend FMinimalGameplayCueReplicationProxyForNetSerializer;
 	friend UE::Net::FMinimalGameplayCueReplicationProxyReplicationFragment;
-#endif
 
 	enum { NumInlineTags = 16 };
 
@@ -266,3 +264,5 @@ struct TStructOpsTypeTraits< FMinimalGameplayCueReplicationProxy > : public TStr
 		WithIdenticalViaEquality = true,
 	};
 };
+
+#undef UE_API

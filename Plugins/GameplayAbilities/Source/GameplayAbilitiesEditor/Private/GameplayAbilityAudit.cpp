@@ -19,6 +19,8 @@
 #include "Textures/SlateIcon.h"
 #include "ToolMenus.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayAbilityAudit)
+
 #define LOCTEXT_NAMESPACE "GameplayAbilityAudit"
 DEFINE_LOG_CATEGORY_STATIC(LogGameplayAbilityAudit, Log, Log);
 

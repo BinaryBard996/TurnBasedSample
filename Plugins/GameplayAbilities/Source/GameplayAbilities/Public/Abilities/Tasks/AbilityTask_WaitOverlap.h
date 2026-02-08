@@ -6,6 +6,8 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitOverlap.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWaitOverlapDelegate, const FGameplayAbilityTargetDataHandle&, TargetData);
 
 class AActor;
@@ -16,8 +18,8 @@ class UPrimitiveComponent;
  *		-Only actually activates on Blocking hits
  *		-Uses first PrimitiveComponent instead of being able to specify arbitrary component.
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitOverlap : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitOverlap : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -25,18 +27,20 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitOverlap : public UAbilityTask
 	FWaitOverlapDelegate	OnOverlap;
 
 	UFUNCTION()
-	void OnHitCallback(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+	UE_API void OnHitCallback(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	/** Wait until an overlap occurs. This will need to be better fleshed out so we can specify game specific collision requirements */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitOverlap* WaitForOverlap(UGameplayAbility* OwningAbility);
+	static UE_API UAbilityTask_WaitOverlap* WaitForOverlap(UGameplayAbility* OwningAbility);
 
 private:
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
 	UPrimitiveComponent* GetComponent();
 	
 };
+
+#undef UE_API

@@ -10,6 +10,7 @@ public class TurnBasedSampleEditorTarget : TargetRules
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_5;
+		bOverrideBuildEnvironment = true;
 		ExtraModuleNames.Add("TurnBasedSample");
 	}
 }

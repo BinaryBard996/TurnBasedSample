@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "AbilitySystemGlobals.h"
+#include "Kismet/GameplayStatics.h"
 #include "Abilities/GameplayAbilityTypes.h"
 #include "AbilitySystemStats.h"
 #include "Engine/Blueprint.h"
@@ -16,19 +17,16 @@
 #include "GameplayTagResponseTable.h"
 #include "GameplayTagsManager.h"
 #include "Engine/Engine.h"
+#include "Modules/ModuleManager.h"
 #include "UObject/UObjectIterator.h"
 
-#if UE_WITH_IRIS
 #include "Serialization/GameplayAbilityTargetDataHandleNetSerializer.h"
 #include "Serialization/GameplayEffectContextHandleNetSerializer.h"
 #include "Serialization/PredictionKeyNetSerializer.h"
-#endif // UE_WITH_IRIS
 
 #if WITH_EDITOR
 #include "Editor.h"
 #endif
-
-#include "Kismet/GameplayStatics.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AbilitySystemGlobals)
 
@@ -373,6 +371,29 @@ void UAbilitySystemGlobals::InitTargetDataScriptStructCache()
 {
 	TargetDataStructCache.InitForType(FGameplayAbilityTargetData::StaticStruct());
 	EffectContextStructCache.InitForType(FGameplayEffectContext::StaticStruct());
+
+	// Handle loading for new modules that might have new structs to add
+	if (!ModulesChangedHandle.IsValid())
+	{
+		ModulesChangedHandle = FModuleManager::Get().OnModulesChanged().AddWeakLambda(this, [this](FName ModuleName, EModuleChangeReason Reason)
+		{
+			if (Reason == EModuleChangeReason::ModuleLoaded)
+			{
+				TargetDataStructCache.SetInitDirty();
+				EffectContextStructCache.SetInitDirty();
+			}
+		});
+	}
+
+	// Handle module unloading to avoid holding onto released structs
+	if (!ModulesUnloadedHandle.IsValid())
+	{
+		ModulesUnloadedHandle = FCoreUObjectDelegates::CompiledInUObjectsRemovedDelegate.AddWeakLambda(this, [this](TConstArrayView<UPackage*> Packages)
+		{
+			TargetDataStructCache.RemoveInPackages(Packages);
+			EffectContextStructCache.RemoveInPackages(Packages);
+		});
+	}
 }
 
 // --------------------------------------------------------------------
@@ -745,23 +766,49 @@ void UAbilitySystemGlobals::NonShipping_ApplyGlobalAbilityScaler_Duration(float&
 
 void FNetSerializeScriptStructCache::InitForType(UScriptStruct* InScriptStruct)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(FNetSerializeScriptStructCache::InitForType);
+
 	ScriptStructs.Reset();
+	BaseStructType = InScriptStruct;
 
 	// Find all script structs of this type and add them to the list
 	// (not sure of a better way to do this but it should only happen once at startup)
 	for (TObjectIterator<UScriptStruct> It; It; ++It)
 	{
-		if (It->IsChildOf(InScriptStruct))
+		if (It->IsChildOf(InScriptStruct) && IsValid(*It))
 		{
+			UE_LOG(LogAbilitySystem, Verbose, TEXT("FNetSerializeScriptStructCache::InitForType: found struct type %s"),
+				*It->GetName());
 			ScriptStructs.Add(*It);
 		}
 	}
 	
 	ScriptStructs.Sort([](const UScriptStruct& A, const UScriptStruct& B) { return A.GetName().ToLower() > B.GetName().ToLower(); });
+
+	bIsInitDirty = false;
+}
+
+void FNetSerializeScriptStructCache::RemoveInPackages(TConstArrayView<UPackage*> Packages)
+{
+	TRACE_CPUPROFILER_EVENT_SCOPE(FNetSerializeScriptStructCache::RemoveInPackages);
+
+	for (auto It = ScriptStructs.CreateIterator(); It; ++It)
+	{
+		if (Packages.Contains(It->GetPackage()))
+		{
+			ABILITY_LOG(Verbose, TEXT("FNetSerializeScriptStructCache::RemoveInPackages: removed %s"), *It->GetName());
+			It.RemoveCurrent();
+		}
+	}
 }
 
 bool FNetSerializeScriptStructCache::NetSerialize(FArchive& Ar, UScriptStruct*& Struct)
 {
+	if (bIsInitDirty)
+	{
+		InitForType(BaseStructType);
+	}
+
 	if (Ar.IsSaving())
 	{
 		int32 idx;

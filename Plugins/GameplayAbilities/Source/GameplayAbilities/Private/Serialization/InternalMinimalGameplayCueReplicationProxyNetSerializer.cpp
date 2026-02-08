@@ -2,7 +2,8 @@
 
 #include "InternalMinimalGameplayCueReplicationProxyNetSerializer.h"
 
-#if UE_WITH_IRIS
+#include UE_INLINE_GENERATED_CPP_BY_NAME(InternalMinimalGameplayCueReplicationProxyNetSerializer)
+
 
 #include "GameplayCueInterface.h"
 
@@ -18,4 +19,3 @@ void FMinimalGameplayCueReplicationProxyForNetSerializer::AssignReplicatedFields
 	ReplicationProxy.ReplicatedLocations = Locations;
 }
 
-#endif

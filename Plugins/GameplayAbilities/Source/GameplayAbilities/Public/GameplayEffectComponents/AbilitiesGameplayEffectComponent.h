@@ -6,6 +6,8 @@
 #include "GameplayAbilitySpec.h"
 #include "AbilitiesGameplayEffectComponent.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 /** Options on how to configure a GameplayAbilitySpec to grant an Actor */
 USTRUCT()
 struct FGameplayAbilitySpecConfig
@@ -32,8 +34,8 @@ struct FGameplayAbilitySpecConfig
 /**
  * Grants additional Gameplay Abilities to the Target of a Gameplay Effect while active
  */
-UCLASS(DisplayName="Grant Gameplay Abilities")
-class GAMEPLAYABILITIES_API UAbilitiesGameplayEffectComponent : public UGameplayEffectComponent
+UCLASS(DisplayName="Grant Gameplay Abilities", MinimalAPI)
+class UAbilitiesGameplayEffectComponent : public UGameplayEffectComponent
 {
 	friend class UGameplayEffect; // for upgrade path
 
@@ -41,35 +43,37 @@ class GAMEPLAYABILITIES_API UAbilitiesGameplayEffectComponent : public UGameplay
 
 public:
 	/** Constructor */
-	UAbilitiesGameplayEffectComponent();
+	UE_API UAbilitiesGameplayEffectComponent();
 
 	/** Register for the appropriate events when we're applied */
-	virtual bool OnActiveGameplayEffectAdded(FActiveGameplayEffectsContainer& ActiveGEContainer, FActiveGameplayEffect& ActiveGE) const override;
+	UE_API virtual bool OnActiveGameplayEffectAdded(FActiveGameplayEffectsContainer& ActiveGEContainer, FActiveGameplayEffect& ActiveGE) const override;
 
 	/** Adds an entry for granting Gameplay Abilities */
-	void AddGrantedAbilityConfig(const FGameplayAbilitySpecConfig& Config);
+	UE_API void AddGrantedAbilityConfig(const FGameplayAbilitySpecConfig& Config);
 
 #if WITH_EDITOR
 	/** Warn on misconfigured Gameplay Effect */
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	UE_API virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif
 
 protected:
 	/** This allows us to be notified when the owning GameplayEffect has had its inhibition changed (which can happen on the initial application). */
-	virtual void OnInhibitionChanged(FActiveGameplayEffectHandle ActiveGEHandle, bool bIsInhibited) const;
+	UE_API virtual void OnInhibitionChanged(FActiveGameplayEffectHandle ActiveGEHandle, bool bIsInhibited) const;
 
 	/** We should grant the configured Gameplay Abilities */
-	virtual void GrantAbilities(FActiveGameplayEffectHandle ActiveGEHandle) const;
+	UE_API virtual void GrantAbilities(FActiveGameplayEffectHandle ActiveGEHandle) const;
 
 	/** We should remove the configured Gameplay Abilities */
-	virtual void RemoveAbilities(FActiveGameplayEffectHandle ActiveGEHandle) const;
+	UE_API virtual void RemoveAbilities(FActiveGameplayEffectHandle ActiveGEHandle) const;
 
 private:
 	/** We must undo all effects when removed */
-	void OnActiveGameplayEffectRemoved(const FGameplayEffectRemovalInfo& RemovalInfo) const;
+	UE_API void OnActiveGameplayEffectRemoved(const FGameplayEffectRemovalInfo& RemovalInfo) const;
 
 protected:
 	/** Abilities to Grant to the Target while this Gameplay Effect is active */
 	UPROPERTY(EditDefaultsOnly, Category = GrantAbilities)
 	TArray<FGameplayAbilitySpecConfig>	GrantAbilityConfigs;
 };
+
+#undef UE_API

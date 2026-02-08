@@ -7,27 +7,29 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitGameplayTagBase.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitGameplayTag : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitGameplayTag : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	UFUNCTION()
-	virtual void GameplayTagCallback(const FGameplayTag Tag, int32 NewCount);
+	UE_API virtual void GameplayTagCallback(const FGameplayTag Tag, int32 NewCount);
 	
-	void SetExternalTarget(AActor* Actor);
+	UE_API void SetExternalTarget(AActor* Actor);
 
 	FGameplayTag	Tag;
 
 protected:
 
-	UAbilitySystemComponent* GetTargetASC();
+	UE_API UAbilitySystemComponent* GetTargetASC();
 
-	virtual void OnDestroy(bool AbilityIsEnding) override;
+	UE_API virtual void OnDestroy(bool AbilityIsEnding) override;
 	
 	bool RegisteredCallback;
 	
@@ -39,3 +41,5 @@ protected:
 
 	FDelegateHandle DelegateHandle;
 };
+
+#undef UE_API

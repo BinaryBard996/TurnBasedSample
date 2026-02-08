@@ -2,8 +2,10 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "UObject/Object.h"
 #include "GameplayEffectComponent.generated.h"
+
+#define UE_API GAMEPLAYABILITIES_API
 
 struct FActiveGameplayEffect;
 struct FActiveGameplayEffectsContainer;
@@ -26,17 +28,17 @@ class UGameplayEffect;
  * 
  * @see GameplayEffect.h for further notes, especially on the terminology used (Added vs. Executed vs. Apply).
  */
-UCLASS(Abstract, Const, DefaultToInstanced, EditInlineNew, CollapseCategories, Within=GameplayEffect)
-class GAMEPLAYABILITIES_API UGameplayEffectComponent : public UObject
+UCLASS(Abstract, Const, DefaultToInstanced, EditInlineNew, CollapseCategories, Within=GameplayEffect, MinimalAPI)
+class UGameplayEffectComponent : public UObject
 {
 	GENERATED_BODY()
 
 public:
 	/** Constructor */
-	UGameplayEffectComponent();
+	UE_API UGameplayEffectComponent();
 
 	/** Returns the GameplayEffect that owns this Component (the Outer) */
-	UGameplayEffect* GetOwner() const;
+	UE_API UGameplayEffect* GetOwner() const;
 
 	/** 
 	 * Can the GameplayEffectSpec apply to the passed-in ASC?  All Components of the GE must return true, or a single one can return false to prohibit the application.
@@ -76,7 +78,7 @@ public:
 	 * Allow each Gameplay Effect Component to validate its own data.  Any warnings/errors will immediately show up in the Gameplay Effect when in Editor.
 	 * The default implementation ensures we only have a single type of any given class.  Override this function to change that functionality and use Super::Super::IsDataValid if needed.
 	 */
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	UE_API virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif
 
 protected:
@@ -96,3 +98,4 @@ const GEComponentClass* FindParentComponent(const GEComponentClass& ChildCompone
 	return ParentGE ? ParentGE->template FindComponent<GEComponentClass>() : nullptr;
 }
 
+#undef UE_API

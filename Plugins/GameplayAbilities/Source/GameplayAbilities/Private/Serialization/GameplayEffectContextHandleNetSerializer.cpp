@@ -4,7 +4,6 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayEffectContextHandleNetSerializer)
 
-#if UE_WITH_IRIS
 
 #include "GameplayEffectTypes.h"
 #include "Iris/Serialization/PolymorphicNetSerializerImpl.h"
@@ -100,4 +99,3 @@ void InitGameplayEffectContextHandleNetSerializerTypeCache()
 	UE::Net::FGameplayEffectContextHandleNetSerializer::InitTypeCache();
 }
 
-#endif // UE_WITH_IRIS

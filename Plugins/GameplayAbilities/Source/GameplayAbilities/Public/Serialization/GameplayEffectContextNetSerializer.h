@@ -14,7 +14,11 @@ struct FGameplayEffectContextNetSerializerConfig : public FNetSerializerConfig
 namespace UE::Net
 {
 
-constexpr SIZE_T GetGameplayEffectContextNetSerializerSafeQuantizedSize() { return 464; }
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+constexpr SIZE_T GetGameplayEffectContextNetSerializerSafeQuantizedSize() { return 512; }
+#else
+constexpr SIZE_T GetGameplayEffectContextNetSerializerSafeQuantizedSize() { return 496; }
+#endif
 
 UE_NET_DECLARE_SERIALIZER(FGameplayEffectContextNetSerializer, GAMEPLAYABILITIES_API);
 

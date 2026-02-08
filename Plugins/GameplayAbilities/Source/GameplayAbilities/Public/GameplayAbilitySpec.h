@@ -14,6 +14,8 @@
 #include "ScalableFloat.h"
 #include "GameplayAbilitySpec.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 class UGameplayAbility;
 struct FGameplayEventData;
@@ -108,7 +110,7 @@ struct FGameplayAbilitySpecDef
  *		-Passed around by value since the struct is small.
  */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilityActivationInfo
+struct FGameplayAbilityActivationInfo
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -118,7 +120,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityActivationInfo
 	{
 	}
 
-	FGameplayAbilityActivationInfo(AActor* InActor);
+	UE_API FGameplayAbilityActivationInfo(AActor* InActor);
 
 	FGameplayAbilityActivationInfo(EGameplayAbilityActivationMode::Type InType)
 		: ActivationMode(InType)
@@ -135,16 +137,16 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityActivationInfo
 	uint8 bCanBeEndedByOtherInstance:1;
 
 	/** Called on client when activation is confirmed on server */
-	void SetActivationConfirmed();
+	UE_API void SetActivationConfirmed();
 
 	/** Called when activation was rejected by the server */
-	void SetActivationRejected();
+	UE_API void SetActivationRejected();
 
 	/** Called on client to set this as a predicted ability */
-	void SetPredicting(FPredictionKey PredictionKey);
+	UE_API void SetPredicting(FPredictionKey PredictionKey);
 
 	/** Called on the server to set the key used by the client to predict this ability */
-	void ServerSetActivationPredictionKey(FPredictionKey PredictionKey);
+	UE_API void ServerSetActivationPredictionKey(FPredictionKey PredictionKey);
 
 	/** Returns prediction key, const to avoid being able to modify it after creation */
 	const FPredictionKey& GetActivationPredictionKey() const { return PredictionKeyWhenActivated; }
@@ -162,7 +164,7 @@ private:
  * and also holds runtime state that must be kept outside of the ability being instanced/activated.
  */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilitySpec : public FFastArraySerializerItem
+struct FGameplayAbilitySpec : public FFastArraySerializerItem
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -179,13 +181,13 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	{ }
 
 	/** Version that takes an ability class */
-	FGameplayAbilitySpec(TSubclassOf<UGameplayAbility> InAbilityClass, int32 InLevel = 1, int32 InInputID = INDEX_NONE, UObject* InSourceObject = nullptr);
+	UE_API FGameplayAbilitySpec(TSubclassOf<UGameplayAbility> InAbilityClass, int32 InLevel = 1, int32 InInputID = INDEX_NONE, UObject* InSourceObject = nullptr);
 
 	/** Version that takes an ability CDO, this exists for backward compatibility */
-	FGameplayAbilitySpec(UGameplayAbility* InAbility, int32 InLevel = 1, int32 InInputID = INDEX_NONE, UObject* InSourceObject = nullptr);
+	UE_API FGameplayAbilitySpec(UGameplayAbility* InAbility, int32 InLevel = 1, int32 InInputID = INDEX_NONE, UObject* InSourceObject = nullptr);
 
 	/** Version that takes an existing spec def */
-	FGameplayAbilitySpec(FGameplayAbilitySpecDef& InDef, int32 InGameplayEffectLevel, FActiveGameplayEffectHandle InGameplayEffectHandle = FActiveGameplayEffectHandle());
+	UE_API FGameplayAbilitySpec(FGameplayAbilitySpecDef& InDef, int32 InGameplayEffectLevel, FActiveGameplayEffectHandle InGameplayEffectHandle = FActiveGameplayEffectHandle());
 
 	/** Handle for outside sources to refer to this spec by */
 	UPROPERTY()
@@ -265,10 +267,10 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	TMap<FGameplayTag, float> SetByCallerTagMagnitudes;
 
 	/** Returns the primary instance, only valid on InstancedPerActor abilities (returns nullptr otherwise) */
-	UGameplayAbility* GetPrimaryInstance() const;
+	UE_API UGameplayAbility* GetPrimaryInstance() const;
 
 	/** interface function to see if the ability should replicated the ability spec or not */
-	bool ShouldReplicateAbilitySpec() const;
+	UE_API bool ShouldReplicateAbilitySpec() const;
 
 	/** Returns all instances, which can include InstancedPerExecution abilities */
 	TArray<UGameplayAbility*> GetAbilityInstances() const
@@ -280,18 +282,18 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	}
 
 	/** Returns true if this ability is active in any way */
-	bool IsActive() const;
+	UE_API bool IsActive() const;
 
-	void PreReplicatedRemove(const struct FGameplayAbilitySpecContainer& InArraySerializer);
-	void PostReplicatedChange(const struct FGameplayAbilitySpecContainer& InArraySerializer);
-	void PostReplicatedAdd(const struct FGameplayAbilitySpecContainer& InArraySerializer);
+	UE_API void PreReplicatedRemove(const struct FGameplayAbilitySpecContainer& InArraySerializer);
+	UE_API void PostReplicatedChange(const struct FGameplayAbilitySpecContainer& InArraySerializer);
+	UE_API void PostReplicatedAdd(const struct FGameplayAbilitySpecContainer& InArraySerializer);
 
-	FString GetDebugString();
+	UE_API FString GetDebugString();
 };
 
 /** Fast serializer wrapper for above struct */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilitySpecContainer : public FFastArraySerializer
+struct FGameplayAbilitySpecContainer : public FFastArraySerializer
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -309,12 +311,9 @@ struct GAMEPLAYABILITIES_API FGameplayAbilitySpecContainer : public FFastArraySe
 	TObjectPtr<UAbilitySystemComponent> Owner;
 
 	/** Initializes Owner variable */
-	void RegisterWithOwner(UAbilitySystemComponent* Owner);
+	GAMEPLAYABILITIES_API void RegisterWithOwner(UAbilitySystemComponent* Owner);
 
-	bool NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParms)
-	{
-		return FFastArraySerializer::FastArrayDeltaSerialize<FGameplayAbilitySpec, FGameplayAbilitySpecContainer>(Items, DeltaParms, *this);
-	}
+	GAMEPLAYABILITIES_API bool NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParms);
 
 	template< typename Type, typename SerializerType >
 	bool ShouldWriteFastArrayItem(const Type& Item, const bool bIsWritingOnClient)
@@ -344,10 +343,10 @@ struct TStructOpsTypeTraits< FGameplayAbilitySpecContainer > : public TStructOps
 };
 
 /** Used to stop us from removing abilities from an ability system component while we're iterating through the abilities */
-struct GAMEPLAYABILITIES_API FScopedAbilityListLock
+struct FScopedAbilityListLock
 {
-	FScopedAbilityListLock(UAbilitySystemComponent& InContainer);
-	~FScopedAbilityListLock();
+	UE_API FScopedAbilityListLock(UAbilitySystemComponent& InContainer);
+	UE_API ~FScopedAbilityListLock();
 
 private:
 	UAbilitySystemComponent& AbilitySystemComponent;
@@ -356,10 +355,10 @@ private:
 #define ABILITYLIST_SCOPE_LOCK()	FScopedAbilityListLock ActiveScopeLock(*this);
 
 /** Used to stop us from canceling or ending an ability while we're iterating through its gameplay targets */
-struct GAMEPLAYABILITIES_API FScopedTargetListLock
+struct FScopedTargetListLock
 {
-	FScopedTargetListLock(UAbilitySystemComponent& InAbilitySystemComponent, const UGameplayAbility& InAbility);
-	~FScopedTargetListLock();
+	UE_API FScopedTargetListLock(UAbilitySystemComponent& InAbilitySystemComponent, const UGameplayAbility& InAbility);
+	UE_API ~FScopedTargetListLock();
 
 private:
 	const UGameplayAbility& GameplayAbility;
@@ -369,3 +368,5 @@ private:
 };
 
 #define TARGETLIST_SCOPE_LOCK(ASC)	FScopedTargetListLock ActiveScopeLock(ASC, *this);
+
+#undef UE_API

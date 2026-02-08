@@ -8,6 +8,8 @@
 #include "GameplayTagContainer.h"
 #include "AbilitySystemDebugHUD.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class APlayerController;
 class UAbilitySystemComponent;
 class UCanvas;
@@ -37,8 +39,8 @@ namespace EAlignVertical
  * An extension for the Ability System debug HUD
  * Extensions should be used for displaying information on screen for each Ability System Actor
  */
-UCLASS(Abstract)
-class GAMEPLAYABILITIES_API UAbilitySystemDebugHUDExtension : public UObject
+UCLASS(Abstract, MinimalAPI)
+class UAbilitySystemDebugHUDExtension : public UObject
 {
 	GENERATED_BODY()
 
@@ -178,3 +180,5 @@ private:
 	static FDelegateHandle DrawDebugDelegateHandle;
 
 };
+
+#undef UE_API

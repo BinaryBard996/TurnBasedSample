@@ -98,7 +98,10 @@ void UGameplayCueManager::OnEngineInitComplete()
 	AssetRegistryModule.Get().OnAssetRenamed().AddUObject(this, &UGameplayCueManager::HandleAssetRenamed);
 	FWorldDelegates::OnPreWorldInitialization.AddUObject(this, &UGameplayCueManager::ReloadObjectLibrary);
 
-	InitializeEditorObjectLibrary();
+	if (GIsEditor)
+	{
+		InitializeEditorObjectLibrary();
+	}
 #endif
 }
 
@@ -141,6 +144,17 @@ void UGameplayCueManager::HandleGameplayCue(AActor* TargetActor, FGameplayTag Ga
 #endif
 
 #if WITH_EDITOR
+	if (RuntimeGameplayCueObjectLibrary.bHasBeenInitialized == false && ShouldDeferScanningRuntimeLibraries())
+	{
+		FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+		if (AssetRegistryModule.Get().IsGathering())
+		{
+			ABILITY_LOG(Warning, TEXT("Waiting for AR scan in HandleGameplayCue..."));
+			// This will trigger the callback to InitializeRuntimeObjectLibrary via OnKnownGathersComplete
+			AssetRegistryModule.Get().WaitForCompletion();
+		}
+	}
+
 	if (GIsEditor && TargetActor == nullptr && UGameplayCueManager::PreviewComponent)
 	{
 		TargetActor = Cast<AActor>(AActor::StaticClass()->GetDefaultObject());
@@ -314,6 +328,11 @@ bool UGameplayCueManager::ShouldAsyncLoadMissingGameplayCues() const
 	return true;
 }
 
+bool UGameplayCueManager::IsAsyncLoadingGameplayCueNotifyClass(const FSoftObjectPath& CueNotifyClass) const
+{
+	return AsyncLoadPendingGameplayCues.Contains(CueNotifyClass);
+}
+
 bool UGameplayCueManager::HandleMissingGameplayCue(UGameplayCueSet* OwningSet, struct FGameplayCueNotifyData& CueData, AActor* TargetActor, EGameplayCueEvent::Type EventType, FGameplayCueParameters& Parameters)
 {
 	if (ShouldSyncLoadMissingGameplayCues())
@@ -332,49 +351,81 @@ bool UGameplayCueManager::HandleMissingGameplayCue(UGameplayCueSet* OwningSet, s
 	}
 	else if (ShouldAsyncLoadMissingGameplayCues())
 	{
-		// Not loaded: start async loading and call when loaded
-		StreamableManager.RequestAsyncLoad(CueData.GameplayCueNotifyObj, FStreamableDelegate::CreateUObject(this, &UGameplayCueManager::OnMissingCueAsyncLoadComplete, 
-			CueData.GameplayCueNotifyObj, TWeakObjectPtr<UGameplayCueSet>(OwningSet), CueData.GameplayCueTag, MakeWeakObjectPtr(TargetActor), EventType, Parameters));
+		const bool bStartAsyncLoad = !IsAsyncLoadingGameplayCueNotifyClass(CueData.GameplayCueNotifyObj);
+		const FAsyncLoadPendingGameplayCue PendingCue(TWeakObjectPtr<UGameplayCueSet>(OwningSet), CueData.GameplayCueTag, MakeWeakObjectPtr(TargetActor), EventType, Parameters);
+		if (bStartAsyncLoad)
+		{
+			ABILITY_LOG(Display, TEXT("Deferred gameplay cue with tag '%s' and event type '%d' until GCN class '%s' is loaded (started async loading)."), *CueData.GameplayCueTag.ToString(), int32(EventType), *CueData.GameplayCueNotifyObj.ToString());
 
-		ABILITY_LOG(Display, TEXT("GameplayCueNotify %s was not loaded when GameplayCue was invoked. Starting async loading."), *CueData.GameplayCueNotifyObj.ToString());
+			// Cache the cue parameters to call it when the GCN class finishes async loading
+			TArray<FAsyncLoadPendingGameplayCue>& PendingEvents = AsyncLoadPendingGameplayCues.Add(CueData.GameplayCueNotifyObj);
+			PendingEvents.Add(PendingCue);
+
+			// Start async loading the GCN class
+			StreamableManager.RequestAsyncLoad(CueData.GameplayCueNotifyObj, FStreamableDelegate::CreateUObject(this, &UGameplayCueManager::OnMissingCueAsyncLoadComplete, CueData.GameplayCueNotifyObj));
+		}
+		else
+		{
+			ABILITY_LOG(Display, TEXT("Deferred gameplay cue with tag '%s' and event type '%d' until GCN class '%s' finishes async loading (already loading)."), *CueData.GameplayCueTag.ToString(), int32(EventType), *CueData.GameplayCueNotifyObj.ToString());
+
+			// Cache the cue parameters to call it when the GCN class finishes async loading
+			AsyncLoadPendingGameplayCues[CueData.GameplayCueNotifyObj].Add(PendingCue);
+		}
 	}
 	return false;
 }
 
-void UGameplayCueManager::OnMissingCueAsyncLoadComplete(FSoftObjectPath LoadedObject, TWeakObjectPtr<UGameplayCueSet> OwningSet, FGameplayTag GameplayCueTag, TWeakObjectPtr<AActor> TargetActor, EGameplayCueEvent::Type EventType, FGameplayCueParameters Parameters)
+void UGameplayCueManager::OnMissingCueAsyncLoadComplete(FSoftObjectPath LoadedNotifyClass)
 {
-	if (!LoadedObject.ResolveObject())
+	if (!LoadedNotifyClass.ResolveObject())
 	{
 		// Load failed
-		ABILITY_LOG(Warning, TEXT("Late load of GameplayCueNotify %s failed!"), *LoadedObject.ToString());
+		ABILITY_LOG(Warning, TEXT("Late load of GameplayCueNotify %s failed!"), *LoadedNotifyClass.ToString());
 		return;
 	}
 
-	if (OwningSet.IsValid())
+	if (ensureMsgf(AsyncLoadPendingGameplayCues.Contains(LoadedNotifyClass), TEXT("Expected an entry for '%s' that was created when async loading for it started"), *LoadedNotifyClass.ToString()))
 	{
-		CurrentWorld = TargetActor.IsValid() ? TargetActor->GetWorld() : nullptr;
-		if (!CurrentWorld)
+		// Keep the array of the pending cue events and their parameters. Remove the GCN class from the map of pending events 
+		// because we're no longer async loading the class: the calls to HandleGameplayCue that we're doing now should execute directly.
+		TArray<FAsyncLoadPendingGameplayCue> PendingEventsCopy = MoveTemp(AsyncLoadPendingGameplayCues[LoadedNotifyClass]);
+		AsyncLoadPendingGameplayCues.Remove(LoadedNotifyClass);
+
+		ABILITY_LOG(Display, TEXT("Finished async loading GameplayCueNotify class '%s'. Executing %d deferred gameplay cues."), *LoadedNotifyClass.ToString(), PendingEventsCopy.Num());
+
+		// Call all pending cues for the GCN class that finished loading
+		for (const FAsyncLoadPendingGameplayCue& PendingEvent : PendingEventsCopy)
 		{
-			// TargetActor has since been destroyed.  Attempt to get the world from the other actors.
-			const AActor* CueInstigator = Parameters.GetInstigator();
-			CurrentWorld = CueInstigator ? CueInstigator->GetWorld() : nullptr;
-			if (!CurrentWorld)
+			// Owning set may have been GCed in the meantime
+			if (PendingEvent.OwningSet.IsValid())
 			{
-				const AActor* EffectCauser = Parameters.GetEffectCauser();
-				CurrentWorld = EffectCauser ? EffectCauser->GetWorld() : nullptr;
+				CurrentWorld = PendingEvent.TargetActor.IsValid() ? PendingEvent.TargetActor->GetWorld() : nullptr;
+				if (!CurrentWorld)
+				{
+					// TargetActor has since been destroyed.  Attempt to get the world from the other actors.
+					const AActor* CueInstigator = PendingEvent.Parameters.GetInstigator();
+					CurrentWorld = CueInstigator ? CueInstigator->GetWorld() : nullptr;
+					if (!CurrentWorld)
+					{
+						const AActor* EffectCauser = PendingEvent.Parameters.GetEffectCauser();
+						CurrentWorld = EffectCauser ? EffectCauser->GetWorld() : nullptr;
+					}
+				}
+
+				// Don't handle gameplay cues for worlds that are tearing down
+				if (!GetWorld() || GetWorld()->bIsTearingDown)
+				{
+					ABILITY_LOG(Verbose, TEXT("Skipping deferred gameplay cue due to invalid world. GCN class: %s | GameplayCueTag: %s | EventType: %d"), *LoadedNotifyClass.ToString(), *PendingEvent.GameplayCueTag.ToString(), int32(PendingEvent.EventType));
+					continue;
+				}
+
+				// Objects are still valid, re-execute cue
+				ABILITY_LOG(Verbose, TEXT("Executing deferred gameplay cue. GCN class: %s | GameplayCueTag: %s | EventType: %d"), *LoadedNotifyClass.ToString(), *PendingEvent.GameplayCueTag.ToString(), int32(PendingEvent.EventType));
+				PendingEvent.OwningSet->HandleGameplayCue(PendingEvent.TargetActor.Get(), PendingEvent.GameplayCueTag, PendingEvent.EventType, PendingEvent.Parameters);
+
+				CurrentWorld = nullptr;
 			}
 		}
-
-		// Don't handle gameplay cues when world is tearing down
-		if (!GetWorld() || GetWorld()->bIsTearingDown)
-		{
-			return;
-		}
-
-		// Objects are still valid, re-execute cue
-		OwningSet->HandleGameplayCue(TargetActor.Get(), GameplayCueTag, EventType, Parameters);
-
-		CurrentWorld = nullptr;
 	}
 }
 
@@ -597,8 +648,28 @@ bool UGameplayCueManager::ShouldAsyncLoadRuntimeObjectLibraries() const
 	return true;
 }
 
+bool UGameplayCueManager::ShouldDeferScanningRuntimeLibraries() const
+{
+	return false;
+}
+
 void UGameplayCueManager::InitializeRuntimeObjectLibrary()
 {
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+	if (AssetRegistryModule.Get().IsGathering() && ShouldDeferScanningRuntimeLibraries())
+	{
+		ABILITY_LOG(Display, TEXT("Asset registry still gathering. Deferring InitializeRuntimeObjectLibrary."));
+		if (!AssetRegistryModule.Get().OnKnownGathersComplete().IsBoundToObject(this))
+		{
+			AssetRegistryModule.Get().OnKnownGathersComplete().AddUObject(this, &UGameplayCueManager::InitializeRuntimeObjectLibrary);
+		}
+		return;
+	}
+
+	ABILITY_LOG(Display, TEXT("Processing InitializeRuntimeObjectLibrary."))
+
+	AssetRegistryModule.Get().OnKnownGathersComplete().RemoveAll(this);
+
 	UE_SCOPED_ENGINE_ACTIVITY(TEXT("Initializing GameplayCueManager Runtime Object Library"));
 
 	RuntimeGameplayCueObjectLibrary.Paths = GetAlwaysLoadedGameplayCuePaths();
@@ -1032,8 +1103,8 @@ void UGameplayCueManager::HandleAssetAdded(UObject *Object)
 	UBlueprint* Blueprint = Cast<UBlueprint>(Object);
 	if (Blueprint && Blueprint->GeneratedClass)
 	{
-		UGameplayCueNotify_Static* StaticCDO = Cast<UGameplayCueNotify_Static>(Blueprint->GeneratedClass->ClassDefaultObject);
-		AGameplayCueNotify_Actor* ActorCDO = Cast<AGameplayCueNotify_Actor>(Blueprint->GeneratedClass->ClassDefaultObject);
+		UGameplayCueNotify_Static* StaticCDO = Cast<UGameplayCueNotify_Static>(Blueprint->GeneratedClass->GetDefaultObject(false));
+		AGameplayCueNotify_Actor* ActorCDO = Cast<AGameplayCueNotify_Actor>(Blueprint->GeneratedClass->GetDefaultObject(false));
 		
 		if (StaticCDO || ActorCDO)
 		{
@@ -1073,8 +1144,8 @@ void UGameplayCueManager::HandleAssetDeleted(UObject *Object)
 	UBlueprint* Blueprint = Cast<UBlueprint>(Object);
 	if (Blueprint && Blueprint->GeneratedClass)
 	{
-		UGameplayCueNotify_Static* StaticCDO = Cast<UGameplayCueNotify_Static>(Blueprint->GeneratedClass->ClassDefaultObject);
-		AGameplayCueNotify_Actor* ActorCDO = Cast<AGameplayCueNotify_Actor>(Blueprint->GeneratedClass->ClassDefaultObject);
+		UGameplayCueNotify_Static* StaticCDO = Cast<UGameplayCueNotify_Static>(Blueprint->GeneratedClass->GetDefaultObject(false));
+		AGameplayCueNotify_Actor* ActorCDO = Cast<AGameplayCueNotify_Actor>(Blueprint->GeneratedClass->GetDefaultObject(false));
 		
 		if (StaticCDO || ActorCDO)
 		{
@@ -1106,8 +1177,8 @@ void UGameplayCueManager::HandleAssetRenamed(const FAssetData& Data, const FStri
 		UClass* DataClass = FindObject<UClass>(nullptr, *ParentClassName);
 		if (DataClass)
 		{
-			UGameplayCueNotify_Static* StaticCDO = Cast<UGameplayCueNotify_Static>(DataClass->ClassDefaultObject);
-			AGameplayCueNotify_Actor* ActorCDO = Cast<AGameplayCueNotify_Actor>(DataClass->ClassDefaultObject);
+			UGameplayCueNotify_Static* StaticCDO = Cast<UGameplayCueNotify_Static>(DataClass->GetDefaultObject(false));
+			AGameplayCueNotify_Actor* ActorCDO = Cast<AGameplayCueNotify_Actor>(DataClass->GetDefaultObject(false));
 			if (StaticCDO || ActorCDO)
 			{
 				VerifyNotifyAssetIsInValidPath(Data.PackagePath.ToString());
@@ -1345,6 +1416,11 @@ void UGameplayCueManager::InvokeGameplayCueExecuted_FromSpec(UAbilitySystemCompo
 
 void UGameplayCueManager::InvokeGameplayCueExecuted(UAbilitySystemComponent* OwningComponent, const FGameplayTag GameplayCueTag, FPredictionKey PredictionKey, FGameplayEffectContextHandle EffectContext)
 {
+	if (!GameplayCueTag.IsValid())
+	{
+		return;
+	}
+
 	if (EnableSuppressCuesOnGameplayCueManager && OwningComponent && OwningComponent->bSuppressGameplayCues)
 	{
 		return;
@@ -1365,6 +1441,11 @@ void UGameplayCueManager::InvokeGameplayCueExecuted(UAbilitySystemComponent* Own
 
 void UGameplayCueManager::InvokeGameplayCueExecuted_WithParams(UAbilitySystemComponent* OwningComponent, const FGameplayTag GameplayCueTag, FPredictionKey PredictionKey, FGameplayCueParameters GameplayCueParameters)
 {
+	if (!GameplayCueTag.IsValid())
+	{
+		return;
+	}
+
 	if (EnableSuppressCuesOnGameplayCueManager && OwningComponent && OwningComponent->bSuppressGameplayCues)
 	{
 		return;
@@ -1539,7 +1620,7 @@ bool UGameplayCueManager::DoesPendingCueExecuteMatch(FGameplayCuePendingExecute&
 
 void UGameplayCueManager::CheckForPreallocation(UClass* GCClass)
 {
-	if (AGameplayCueNotify_Actor* InstancedCue = Cast<AGameplayCueNotify_Actor>(GCClass->ClassDefaultObject))
+	if (AGameplayCueNotify_Actor* InstancedCue = Cast<AGameplayCueNotify_Actor>(GCClass->GetDefaultObject(false)))
 	{
 		if (InstancedCue->NumPreallocatedInstances > 0 && GameplayCueClassesForPreallocation.Contains(GCClass) == false)
 		{

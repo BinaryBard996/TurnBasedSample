@@ -9,6 +9,8 @@
 #include "Templates/TypeCompatibleBytes.h"
 #include "GameplayPrediction.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 namespace UE::Net
 {
@@ -291,7 +293,7 @@ DECLARE_DELEGATE(FPredictionKeyEvent);
 
 PRAGMA_DISABLE_DEPRECATION_WARNINGS // PredictiveConnection
 USTRUCT()
-struct GAMEPLAYABILITIES_API FPredictionKey
+struct FPredictionKey
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -311,24 +313,24 @@ struct GAMEPLAYABILITIES_API FPredictionKey
 	bool bIsServerInitiated = false;
 
 	/** Construct a new prediction key with no dependencies */
-	static FPredictionKey CreateNewPredictionKey(const UAbilitySystemComponent*);
+	static UE_API FPredictionKey CreateNewPredictionKey(const UAbilitySystemComponent*);
 
 	/** Construct a new server initiation key, for abilities activated on the server */
-	static FPredictionKey CreateNewServerInitiatedKey(const UAbilitySystemComponent*);
+	static UE_API FPredictionKey CreateNewServerInitiatedKey(const UAbilitySystemComponent*);
 
 	/** Create a new dependent prediction key: keep our existing base or use the current key as the base. */
-	void GenerateDependentPredictionKey();
+	UE_API void GenerateDependentPredictionKey();
 
 	/** Creates new delegate called only when this key is rejected. */
-	FPredictionKeyEvent& NewRejectedDelegate();
+	UE_API FPredictionKeyEvent& NewRejectedDelegate();
 
 	/** Creates new delegate called only when replicated state catches up to this key. */
-	FPredictionKeyEvent& NewCaughtUpDelegate();
+	UE_API FPredictionKeyEvent& NewCaughtUpDelegate();
 	
 	/** Add a new delegate that is called if the key is rejected or caught up to. */
-	void NewRejectOrCaughtUpDelegate(FPredictionKeyEvent Event);
+	UE_API void NewRejectOrCaughtUpDelegate(FPredictionKeyEvent Event);
 	
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	/** A key is valid if it's non-zero, prediction keys for other clients will serialize down as 0 and be invalid */
 	bool IsValidKey() const
@@ -387,12 +389,19 @@ struct GAMEPLAYABILITIES_API FPredictionKey
 		return ((InKey.Current << 1) | (InKey.bIsServerInitiated & 1));
 	}
 
-	uint64 GetPredictiveConnectionKey() const { return BitCast<uint64>(PredictiveConnectionObjectKey); }
+	uint64 GetPredictiveConnectionKey() const 
+	{ 
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+		return BitCast<uint64>(PredictiveConnectionObjectKey.GetRemoteId());
+#else
+		return BitCast<uint64>(PredictiveConnectionObjectKey);
+#endif
+	}
 
 private:
 	friend UE::Net::FPredictionKeyNetSerializer;
 
-	void GenerateNewPredictionKey();
+	UE_API void GenerateNewPredictionKey();
 
 	explicit FPredictionKey(int32 Key)
 		: Current(static_cast<KeyType>(Key))
@@ -467,18 +476,18 @@ class UGameplayAbility;
  *	A structure for allowing scoped prediction windows.
  */
 
-struct GAMEPLAYABILITIES_API FScopedPredictionWindow
+struct FScopedPredictionWindow
 {
 	/** To be called on server when a new prediction key is received from the client (In an RPC). 
 	 *	InSetReplicatedPredictionKey should be set to false in cases where we want a scoped prediction key but have already repped the prediction key.
 	 *	(For example, cached target data will restore the prediction key that the TD was sent with, but this key was already repped down as confirmed when received)
 	 **/
-	FScopedPredictionWindow(UAbilitySystemComponent* AbilitySystemComponent, FPredictionKey InPredictionKey, bool InSetReplicatedPredictionKey = true);
+	UE_API FScopedPredictionWindow(UAbilitySystemComponent* AbilitySystemComponent, FPredictionKey InPredictionKey, bool InSetReplicatedPredictionKey = true);
 
 	/** To be called in the callsite where the predictive code will take place. This generates a new PredictionKey and acts as a synchonization point between client and server for that key.  */
-	FScopedPredictionWindow(UAbilitySystemComponent* AbilitySystemComponent, bool CanGenerateNewKey=true);
+	UE_API FScopedPredictionWindow(UAbilitySystemComponent* AbilitySystemComponent, bool CanGenerateNewKey=true);
 
-	~FScopedPredictionWindow();
+	UE_API ~FScopedPredictionWindow();
 
 private:
 
@@ -515,13 +524,13 @@ enum class EGasPredictionKeyResult : uint8
  * For example, we use this in a case where we want to play a Montage locally, and we notify the server unreliably (i.e. it is an optional event).
  * Note: Nothing stops something within this scope from creating a valid key, then sending that valid key to the server.  This is meant for generated keys that aren't already going to be sent.
  */
-struct GAMEPLAYABILITIES_API FScopedDiscardPredictions
+struct FScopedDiscardPredictions
 {
 	// Pass in the AbilitySystemComponent to discard predictions on.  Optionally, if we want to do something other than just Drop the prediction events you can override that.
-	explicit FScopedDiscardPredictions(UAbilitySystemComponent* AbilitySystemComponent, EGasPredictionKeyResult HowToHandlePredictions = EGasPredictionKeyResult::SilentlyDrop);
+	UE_API explicit FScopedDiscardPredictions(UAbilitySystemComponent* AbilitySystemComponent, EGasPredictionKeyResult HowToHandlePredictions = EGasPredictionKeyResult::SilentlyDrop);
 
 	// When the scope ends, we will perform the final drop/ack/nack of the prediction chain
-	~FScopedDiscardPredictions();
+	UE_API ~FScopedDiscardPredictions();
 
 private:
 	// Weak pointer to the 'Owning' ASC.  If this ends up being invalid/null we don't do anything.
@@ -611,3 +620,5 @@ struct TStructOpsTypeTraits< FReplicatedPredictionKeyMap > : public TStructOpsTy
 		WithNetDeltaSerializer = true,
 	};
 };
+
+#undef UE_API

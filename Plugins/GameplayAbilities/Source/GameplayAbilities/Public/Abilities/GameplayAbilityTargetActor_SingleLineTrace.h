@@ -8,11 +8,15 @@
 #include "Abilities/GameplayAbilityTargetActor_Trace.h"
 #include "GameplayAbilityTargetActor_SingleLineTrace.generated.h"
 
-UCLASS(Blueprintable)
-class GAMEPLAYABILITIES_API AGameplayAbilityTargetActor_SingleLineTrace : public AGameplayAbilityTargetActor_Trace
+#define UE_API GAMEPLAYABILITIES_API
+
+UCLASS(Blueprintable, MinimalAPI)
+class AGameplayAbilityTargetActor_SingleLineTrace : public AGameplayAbilityTargetActor_Trace
 {
 	GENERATED_UCLASS_BODY()
 
 protected:
-	virtual FHitResult PerformTrace(AActor* InSourceActor) override;
+	UE_API virtual FHitResult PerformTrace(AActor* InSourceActor) override;
 };
+
+#undef UE_API

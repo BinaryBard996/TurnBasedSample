@@ -60,7 +60,7 @@ void UAbilityTask_ApplyRootMotionConstantForce::SharedInitAndApply()
 		StartTime = GetWorld()->GetTimeSeconds();
 		EndTime = StartTime + Duration;
 
-		if (MovementComponent)
+		if (MovementComponent.IsValid())
 		{
 			ForceName = ForceName.IsNone() ? FName("AbilityTaskApplyRootMotionConstantForce"): ForceName;
 			TSharedPtr<FRootMotionSource_ConstantForce> ConstantForce = MakeShared<FRootMotionSource_ConstantForce>();
@@ -145,7 +145,7 @@ void UAbilityTask_ApplyRootMotionConstantForce::PreDestroyFromReplication()
 
 void UAbilityTask_ApplyRootMotionConstantForce::OnDestroy(bool AbilityIsEnding)
 {
-	if (MovementComponent)
+	if (MovementComponent.IsValid())
 	{
 		MovementComponent->RemoveRootMotionSourceByID(RootMotionSourceID);
 	}

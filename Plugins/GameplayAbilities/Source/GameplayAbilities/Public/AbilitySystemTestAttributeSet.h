@@ -7,8 +7,10 @@
 #include "AttributeSet.h"
 #include "AbilitySystemTestAttributeSet.generated.h"
 
-UCLASS(Blueprintable, BlueprintType, meta=(HideInDetailsView))
-class GAMEPLAYABILITIES_API UAbilitySystemTestAttributeSet : public UAttributeSet
+#define UE_API GAMEPLAYABILITIES_API
+
+UCLASS(Blueprintable, BlueprintType, meta=(HideInDetailsView), MinimalAPI)
+class UAbilitySystemTestAttributeSet : public UAttributeSet
 {
 	GENERATED_UCLASS_BODY()
 
@@ -70,6 +72,8 @@ class GAMEPLAYABILITIES_API UAbilitySystemTestAttributeSet : public UAttributeSe
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AttributeTest")
 	mutable float	NoStackAttribute;
 
-	virtual bool PreGameplayEffectExecute(struct FGameplayEffectModCallbackData &Data) override;
-	virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData &Data) override;
+	UE_API virtual bool PreGameplayEffectExecute(struct FGameplayEffectModCallbackData &Data) override;
+	UE_API virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData &Data) override;
 };
+
+#undef UE_API

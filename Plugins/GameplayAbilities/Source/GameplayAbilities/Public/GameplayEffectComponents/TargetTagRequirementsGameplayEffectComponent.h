@@ -6,29 +6,31 @@
 #include "GameplayEffectComponent.h"
 #include "TargetTagRequirementsGameplayEffectComponent.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 struct FGameplayEffectRemovalInfo;
 
 /** Specifies tag requirements that the Target (owner of the Gameplay Effect) must have if this GE should apply or continue to execute */
-UCLASS(DisplayName="Require Tags to Apply/Continue This Effect")
-class GAMEPLAYABILITIES_API UTargetTagRequirementsGameplayEffectComponent : public UGameplayEffectComponent
+UCLASS(DisplayName="Require Tags to Apply/Continue This Effect", MinimalAPI)
+class UTargetTagRequirementsGameplayEffectComponent : public UGameplayEffectComponent
 {
 	GENERATED_BODY()
 
 public:
 	/** Constructor to set EditorFriendlyName */
-	UTargetTagRequirementsGameplayEffectComponent();
+	UE_API UTargetTagRequirementsGameplayEffectComponent();
 
 	/** Can we apply to the ActiveGEContainer? */
-	virtual bool CanGameplayEffectApply(const FActiveGameplayEffectsContainer& ActiveGEContainer, const FGameplayEffectSpec& GESpec) const override;
+	UE_API virtual bool CanGameplayEffectApply(const FActiveGameplayEffectsContainer& ActiveGEContainer, const FGameplayEffectSpec& GESpec) const override;
 
 	/** Once we've applied, we need to register for ongoing requirements */
-	virtual bool OnActiveGameplayEffectAdded(FActiveGameplayEffectsContainer& GEContainer, FActiveGameplayEffect& ActiveGE) const override;
+	UE_API virtual bool OnActiveGameplayEffectAdded(FActiveGameplayEffectsContainer& GEContainer, FActiveGameplayEffect& ActiveGE) const override;
 
 #if WITH_EDITOR
 	/**
 	 * Validate incompatible configurations
 	 */
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	UE_API virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif // WITH_EDITOR
 
 private:
@@ -54,3 +56,5 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = Tags)
 	FGameplayTagRequirements RemovalTagRequirements;
 };
+
+#undef UE_API

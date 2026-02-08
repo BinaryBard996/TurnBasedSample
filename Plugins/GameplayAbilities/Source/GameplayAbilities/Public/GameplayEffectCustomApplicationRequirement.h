@@ -2,22 +2,25 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "UObject/Object.h"
 #include "GameplayEffectCustomApplicationRequirement.generated.h"
+
+#define UE_API GAMEPLAYABILITIES_API
 
 struct FGameplayEffectSpec;
 class UGameplayEffect;
 class UAbilitySystemComponent;
 
 /** Class used to perform custom gameplay effect modifier calculations, either via blueprint or native code */ 
-UCLASS(BlueprintType, Blueprintable, Abstract)
-class GAMEPLAYABILITIES_API UGameplayEffectCustomApplicationRequirement : public UObject
+UCLASS(BlueprintType, Blueprintable, Abstract, MinimalAPI)
+class UGameplayEffectCustomApplicationRequirement : public UObject
 {
+	GENERATED_BODY()
 
 public:
-	GENERATED_UCLASS_BODY()
-	
 	/** Return whether the gameplay effect should be applied or not */
 	UFUNCTION(BlueprintNativeEvent, Category="Calculation")
-	bool CanApplyGameplayEffect(const UGameplayEffect* GameplayEffect, const FGameplayEffectSpec& Spec, UAbilitySystemComponent* ASC) const;
+	UE_API bool CanApplyGameplayEffect(const UGameplayEffect* GameplayEffect, const FGameplayEffectSpec& Spec, UAbilitySystemComponent* ASC) const;
 };
+
+#undef UE_API

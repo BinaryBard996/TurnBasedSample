@@ -2,7 +2,6 @@
 
 #include "Serialization/GameplayAbilityTargetDataHandleNetSerializer.h"
 
-#if UE_WITH_IRIS
 
 #include "Abilities/GameplayAbilityTargetTypes.h"
 #include "Iris/Serialization/NetSerializerDelegates.h"
@@ -267,5 +266,3 @@ void InitGameplayAbilityTargetDataHandleNetSerializerTypeCache()
 {
 	UE::Net::FGameplayAbilityTargetDataHandleNetSerializer::InitTypeCache();
 }
-
-#endif // UE_WITH_IRIS

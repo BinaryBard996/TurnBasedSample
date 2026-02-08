@@ -7,6 +7,8 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_StartAbilityState.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FAbilityStateDelegate);
 
 /**
@@ -23,8 +25,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FAbilityStateDelegate);
  * 'OnStateInterrupted' will be called if:
  * - The ability itself is cancelled via AGameplayAbility::CancelAbility
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_StartAbilityState : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_StartAbilityState : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -36,11 +38,11 @@ class GAMEPLAYABILITIES_API UAbilityTask_StartAbilityState : public UAbilityTask
 	UPROPERTY(BlueprintAssignable)
 	FAbilityStateDelegate OnStateInterrupted;
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
-	virtual void ExternalCancel() override;
+	UE_API virtual void ExternalCancel() override;
 
-	virtual FString GetDebugString() const override;
+	UE_API virtual FString GetDebugString() const override;
 
 	/**
 	 * Starts a new ability state.
@@ -49,7 +51,7 @@ class GAMEPLAYABILITIES_API UAbilityTask_StartAbilityState : public UAbilityTask
 	 * @param bEndCurrentState If true, all other active ability states will be ended.
 	 */
 	UFUNCTION(BlueprintCallable, Meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true", HideSpawnParms = "Instigator"), Category = "Ability|Tasks")
-	static UAbilityTask_StartAbilityState* StartAbilityState(UGameplayAbility* OwningAbility, FName StateName, bool bEndCurrentState = true);
+	static UE_API UAbilityTask_StartAbilityState* StartAbilityState(UGameplayAbility* OwningAbility, FName StateName, bool bEndCurrentState = true);
 
 private:
 
@@ -61,8 +63,10 @@ private:
 
 	bool bEndCurrentState;
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
 	void OnEndState(FName StateNameToEnd);
 	void OnInterruptState();
 };
+
+#undef UE_API

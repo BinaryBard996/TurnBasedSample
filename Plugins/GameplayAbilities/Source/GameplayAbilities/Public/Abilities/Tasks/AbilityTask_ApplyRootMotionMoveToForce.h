@@ -7,6 +7,8 @@
 #include "Abilities/Tasks/AbilityTask_ApplyRootMotion_Base.h"
 #include "AbilityTask_ApplyRootMotionMoveToForce.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UCharacterMovementComponent;
 class UCurveVector;
 class UGameplayTasksComponent;
@@ -19,8 +21,8 @@ class AActor;
 /**
  *	Applies force to character's movement
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_ApplyRootMotionMoveToForce : public UAbilityTask_ApplyRootMotion_Base
+UCLASS(MinimalAPI)
+class UAbilityTask_ApplyRootMotionMoveToForce : public UAbilityTask_ApplyRootMotion_Base
 {
 	GENERATED_BODY()
 	
@@ -33,16 +35,16 @@ public:
 
 	/** Apply force to character's movement */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_ApplyRootMotionMoveToForce* ApplyRootMotionMoveToForce(UGameplayAbility* OwningAbility, FName TaskInstanceName, FVector TargetLocation, float Duration, bool bSetNewMovementMode, EMovementMode MovementMode, bool bRestrictSpeedToExpected, UCurveVector* PathOffsetCurve, ERootMotionFinishVelocityMode VelocityOnFinishMode, FVector SetVelocityOnFinish, float ClampVelocityOnFinish);
+	static UE_API UAbilityTask_ApplyRootMotionMoveToForce* ApplyRootMotionMoveToForce(UGameplayAbility* OwningAbility, FName TaskInstanceName, FVector TargetLocation, float Duration, bool bSetNewMovementMode, EMovementMode MovementMode, bool bRestrictSpeedToExpected, UCurveVector* PathOffsetCurve, ERootMotionFinishVelocityMode VelocityOnFinishMode, FVector SetVelocityOnFinish, float ClampVelocityOnFinish);
 
 	/** Tick function for this task, if bTickingTask == true */
-	virtual void TickTask(float DeltaTime) override;
+	UE_API virtual void TickTask(float DeltaTime) override;
 
-	virtual void PreDestroyFromReplication() override;
-	virtual void OnDestroy(bool AbilityIsEnding) override;
+	UE_API virtual void PreDestroyFromReplication() override;
+	UE_API virtual void OnDestroy(bool AbilityIsEnding) override;
 
 protected:
-	virtual void SharedInitAndApply() override;
+	UE_API virtual void SharedInitAndApply() override;
 
 	UPROPERTY(Replicated)
 	FVector StartLocation;
@@ -71,3 +73,5 @@ protected:
 	EMovementMode PreviousMovementMode = EMovementMode::MOVE_None;
 	uint8 PreviousCustomMovementMode = 0;
 };
+
+#undef UE_API

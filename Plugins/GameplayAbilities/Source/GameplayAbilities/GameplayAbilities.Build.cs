@@ -20,7 +20,7 @@ namespace UnrealBuildTool.Rules
 					"MovieScene",
 					"PhysicsCore",
 					"DeveloperSettings",
-					"DataRegistry",
+					"DataRegistry"
 				}
 				);
 

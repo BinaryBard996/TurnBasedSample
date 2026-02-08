@@ -2,7 +2,6 @@
 
 #pragma once
 
-#if UE_WITH_IRIS
 
 #include "Iris/ReplicationState/PropertyReplicationState.h"
 #include "Iris/ReplicationSystem/ReplicationFragment.h"
@@ -30,6 +29,7 @@ protected:
 	virtual void ApplyReplicatedState(FReplicationStateApplyContext& Context) const override;
 	virtual bool PollReplicatedState(EReplicationFragmentPollFlags PollOption) override;
 	virtual void CallRepNotifies(FReplicationStateApplyContext& Context) override;
+	virtual void CollectOwner(FReplicationStateOwnerCollector* Owners) const override;
 
 private:
 	void MimicMinimalGameplayCueReplicationProxyReceiveLogic(FReplicationStateApplyContext& Context) const;
@@ -43,4 +43,3 @@ private:
 
 }
 
-#endif

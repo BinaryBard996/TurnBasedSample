@@ -21,9 +21,7 @@
 
 #define LOCTEXT_NAMESPACE "GameplayAbility"
 
-#if UE_WITH_IRIS
 #include "Iris/ReplicationSystem/ReplicationFragmentUtil.h"
-#endif // UE_WITH_IRIS
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayAbility)
 
@@ -39,6 +37,15 @@ namespace UE::AbilitySystem::Private
 	int32 CVarDeprecateReplicatedPropertiesValue = 2;
 	static FAutoConsoleVariableRef CVarDeprecateReplicatedProperties(TEXT("AbilitySystem.DeprecateReplicatedProperties"), CVarDeprecateReplicatedPropertiesValue,
 		TEXT("Deprecate the use of Replicated Properties. ") TEXT("0: No. 1: Yes. 2: Yes, Except During Automation"), ECVF_Default );
+
+	/** 
+		By default, for a GameplayEffect to be usable as an ability's CooldownGameplayEffectClass class, that GameplayEffect must grant at least one GameplayTag.
+		If the GE grants no tags, the ability doesn't consider itself on cooldown even if the GE is applied. Thus by default we want to warn developers at editor-time
+		when a CooldownGameplayEffectClass is configured that grants no tags. These warnings can be disabled via this CVar, because UGameplayAbility::CheckCooldown
+		can be overridden and thus the CooldownGameplayEffectClass may not require granted tags.
+	*/
+	int32 CVarWarnCooldownEffectWithoutTagsValue = 1;
+	static FAutoConsoleVariableRef CVarWarnCooldownEffectWithoutTags(TEXT("AbilitySystem.WarnCooldownEffectWithoutTags"), CVarWarnCooldownEffectWithoutTagsValue, TEXT("Show an editor warning and runtime log when a GameplayAbility is configured with a CooldownGameplayEffectClass that grants no tags"), ECVF_Default);
 }
 
 namespace FAbilitySystemTweaks
@@ -134,7 +141,7 @@ int32 UGameplayAbility::GetFunctionCallspace(UFunction* Function, FFrame* Stack)
 bool UGameplayAbility::CallRemoteFunction(UFunction* Function, void* Parameters, FOutParmRec* OutParms, FFrame* Stack)
 {
 	// Make sure we are not invalid when being called
-	if (!IsValid(this))
+	if (!IsValidChecked(this))
 	{
 		ABILITY_LOG(Warning, TEXT("%s:CallRemoteFunction called while 'this' was invalid. Skipping the rest of the code."), *GetPathName());
 		return false;
@@ -215,7 +222,7 @@ bool UGameplayAbility::IsActive() const
 	}
 
 	// NonInstanced and Instanced-Per-Execution abilities are by definition active unless they are pending kill
-	return IsValid(this);
+	return IsValidChecked(this);
 }
 
 bool UGameplayAbility::IsSupportedForNetworking() const
@@ -231,6 +238,15 @@ bool UGameplayAbility::IsSupportedForNetworking() const
 	bool Supported = GetReplicationPolicy() != EGameplayAbilityReplicationPolicy::ReplicateNo || GetOuter()->IsA(UPackage::StaticClass());
 
 	return Supported;
+}
+
+void UGameplayAbility::PreDestroyFromReplication()
+{
+	// We're being destroyed, just cancel locally.
+	if (IsActive())
+	{
+		CancelAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false);
+	}
 }
 
 #if WITH_EDITOR
@@ -309,6 +325,23 @@ EDataValidationResult UGameplayAbility::IsDataValid(FDataValidationContext& Cont
 		}
 	}
 
+	// Generate a blueprint warning if a Cooldown GE class is configured that doesn't grant tags.
+	// If your project overrides GetCooldownGameplayEffect() or CheckCooldown() so that cooldown
+	// checking doesn't depend on a tag, set this CVar to 0.
+	if (UE::AbilitySystem::Private::CVarWarnCooldownEffectWithoutTagsValue > 0 && CooldownGameplayEffectClass != nullptr)
+	{
+		if (const UGameplayEffect* CooldownGE = GetCooldownGameplayEffect())
+		{
+			// Detect misconfigured cooldown GE class. Ignore when class doesn't match due to overridden GetCooldownGameplayEffect().
+			if (CooldownGE->GetClass() == CooldownGameplayEffectClass && CooldownGE->GetGrantedTags().IsEmpty())
+			{
+				FText ErrorText = FText::Format(LOCTEXT("CooldownEffectNoTags", "CooldownGameplayEffectClass '{0}' grants no tags. A GameplayEffect class must grant tags (Component: Grant Tags to Target Actor) to be used as cooldown."), CooldownGameplayEffectClass->GetDisplayNameText());
+				Context.AddError(ErrorText);
+				Result = EDataValidationResult::Invalid;
+			}
+		}
+	}
+
 	return Result;
 }
 #endif
@@ -371,7 +404,7 @@ bool UGameplayAbility::DoesAbilitySatisfyTagRequirements(const UAbilitySystemCom
 	};
 
 	// Start by checking all of the blocked tags first (so OptionalRelevantTags will contain blocked tags first)
-	CheckForBlocked(AbilitySystemComponent.GetBlockedAbilityTags(), GetAssetTags());
+	CheckForBlocked(GetAssetTags(), AbilitySystemComponent.GetBlockedAbilityTags());
 	CheckForBlocked(AbilitySystemComponent.GetOwnedGameplayTags(), ActivationBlockedTags);
 	if (SourceTags != nullptr)
 	{
@@ -391,6 +424,18 @@ bool UGameplayAbility::DoesAbilitySatisfyTagRequirements(const UAbilitySystemCom
 	if (TargetTags != nullptr)
 	{
 		CheckForRequired(*TargetTags, TargetRequiredTags);
+	}
+
+	if (!bBlocked && !bMissing)
+	{
+		// If it's a custom implementation that blocks, we can't specify exactly which tag so just use the generic
+		bBlocked = AbilitySystemComponent.AreAbilityTagsBlocked(GetAssetTags());
+		if (bBlocked && OptionalRelevantTags)
+		{
+			UAbilitySystemGlobals& AbilitySystemGlobals = UAbilitySystemGlobals::Get();
+			const FGameplayTag& BlockedTag = AbilitySystemGlobals.ActivateFailTagsBlockedTag;
+			OptionalRelevantTags->AddTag(BlockedTag);
+		}
 	}
 
 	// We succeeded if there were no blocked tags and no missing required tags	
@@ -464,8 +509,8 @@ bool UGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handl
 	{
 		if (FScopedCanActivateAbilityLogEnabler::IsLoggingEnabled())
 		{
-			UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: %s could not be activated due to Cooldown"), *GetNameSafe(ActorInfo->OwnerActor.Get()), *GetNameSafe(Spec->Ability));
-			UE_VLOG(ActorInfo->OwnerActor.Get(), VLogAbilitySystem, Verbose, TEXT("%s could not be activated due to Cooldown"), *GetNameSafe(Spec->Ability));
+			UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: %s could not be activated due to Cooldown (%s)"), *GetNameSafe(ActorInfo->OwnerActor.Get()), *GetNameSafe(Spec->Ability), OptionalRelevantTags ? *OptionalRelevantTags->ToStringSimple() : TEXT("Unknown"));
+			UE_VLOG(ActorInfo->OwnerActor.Get(), VLogAbilitySystem, Verbose, TEXT("%s could not be activated due to Cooldown (%s)"), *GetNameSafe(Spec->Ability), OptionalRelevantTags ? *OptionalRelevantTags->ToStringSimple() : TEXT("Unknown"));
 		}
 		return false;
 	}
@@ -474,8 +519,8 @@ bool UGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handl
 	{
 		if (FScopedCanActivateAbilityLogEnabler::IsLoggingEnabled())
 		{
-			UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: %s could not be activated due to Cost"), *GetNameSafe(ActorInfo->OwnerActor.Get()), *GetNameSafe(Spec->Ability));
-			UE_VLOG(ActorInfo->OwnerActor.Get(), VLogAbilitySystem, Verbose, TEXT("%s could not be activated due to Cost"), *GetNameSafe(Spec->Ability));
+			UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: %s could not be activated due to Cost (%s)"), *GetNameSafe(ActorInfo->OwnerActor.Get()), *GetNameSafe(Spec->Ability), OptionalRelevantTags ? *OptionalRelevantTags->ToStringSimple() : TEXT("Unknown"));
+			UE_VLOG(ActorInfo->OwnerActor.Get(), VLogAbilitySystem, Verbose, TEXT("%s could not be activated due to Cost (%s)"), *GetNameSafe(Spec->Ability), OptionalRelevantTags ? *OptionalRelevantTags->ToStringSimple() : TEXT("Unknown"));
 		}
 		return false;
 	}
@@ -484,8 +529,8 @@ bool UGameplayAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handl
 	{	// If the ability's tags are blocked, or if it has a "Blocking" tag or is missing a "Required" tag, then it can't activate.
 		if (FScopedCanActivateAbilityLogEnabler::IsLoggingEnabled())
 		{
-			UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: %s could not be activated due to Blocking Tags or Missing Required Tags"), *GetNameSafe(ActorInfo->OwnerActor.Get()), *GetNameSafe(Spec->Ability));
-			UE_VLOG(ActorInfo->OwnerActor.Get(), VLogAbilitySystem, Verbose, TEXT("%s could not be activated due to Blocking Tags or Missing Required Tags"), *GetNameSafe(Spec->Ability));
+			UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: %s could not be activated due to Blocking Tags or Missing Required Tags (%s)"), *GetNameSafe(ActorInfo->OwnerActor.Get()), *GetNameSafe(Spec->Ability), OptionalRelevantTags ? *OptionalRelevantTags->ToStringSimple() : TEXT("Unknown"));
+			UE_VLOG(ActorInfo->OwnerActor.Get(), VLogAbilitySystem, Verbose, TEXT("%s could not be activated due to Blocking Tags or Missing Required Tags (%s)"), *GetNameSafe(Spec->Ability), OptionalRelevantTags ? *OptionalRelevantTags->ToStringSimple() : TEXT("Unknown"));
 		}
 		return false;
 	}
@@ -822,20 +867,7 @@ void UGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const
 			}
 
 			// Remove tags we added to owner
-			AbilitySystemComponent->RemoveLooseGameplayTags(ActivationOwnedTags);
-
-			if (UAbilitySystemGlobals::Get().ShouldReplicateActivationOwnedTags())
-			{
-				if (GetNetExecutionPolicy() == EGameplayAbilityNetExecutionPolicy::LocalPredicted || GetNetExecutionPolicy() == EGameplayAbilityNetExecutionPolicy::ServerInitiated)
-				{
-					// If this ability also executes on the client, then don't communicate the tags to the client (it already used RemoveLooseGameplayTags above)
-					AbilitySystemComponent->RemoveMinimalReplicationGameplayTags(ActivationOwnedTags);
-				}
-				else
-				{
-					AbilitySystemComponent->RemoveReplicatedLooseGameplayTags(ActivationOwnedTags);
-				}
-			}
+			AbilitySystemComponent->RemoveLooseGameplayTags(ActivationOwnedTags, 1, UAbilitySystemGlobals::Get().ShouldReplicateActivationOwnedTags() ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::None);
 
 			// Remove tracked GameplayCues that we added
 			for (FGameplayTag& GameplayCueTag : TrackedGameplayCues)
@@ -948,20 +980,7 @@ void UGameplayAbility::PreActivate(const FGameplayAbilitySpecHandle Handle, cons
 
 	Comp->HandleChangeAbilityCanBeCanceled(GetAssetTags(), this, true);
 
-	Comp->AddLooseGameplayTags(ActivationOwnedTags);
-
-	if (UAbilitySystemGlobals::Get().ShouldReplicateActivationOwnedTags())
-	{
-		if (GetNetExecutionPolicy() == EGameplayAbilityNetExecutionPolicy::LocalPredicted || GetNetExecutionPolicy() == EGameplayAbilityNetExecutionPolicy::ServerInitiated)
-		{
-			// If this ability also executes on the client, then don't communicate the tags to the client (it already used AddLooseGameplayTags above)
-			Comp->AddMinimalReplicationGameplayTags(ActivationOwnedTags);
-		}
-		else
-		{
-			Comp->AddReplicatedLooseGameplayTags(ActivationOwnedTags);
-		}
-	}
+	Comp->AddLooseGameplayTags(ActivationOwnedTags, 1, UAbilitySystemGlobals::Get().ShouldReplicateActivationOwnedTags() ? EGameplayTagReplicationState::CountToOwner : EGameplayTagReplicationState::None);
 
 	if (OnGameplayAbilityEndedDelegate)
 	{
@@ -1043,26 +1062,35 @@ bool UGameplayAbility::CheckCooldown(const FGameplayAbilitySpecHandle Handle, co
 	}
 
 	const FGameplayTagContainer* CooldownTags = GetCooldownTags();
-	if (CooldownTags && !CooldownTags->IsEmpty())
+	if (CooldownTags)
 	{
-		if (UAbilitySystemComponent* AbilitySystemComponent = ActorInfo->AbilitySystemComponent.Get())
+		if (!CooldownTags->IsEmpty())
 		{
-			if (AbilitySystemComponent->HasAnyMatchingGameplayTags(*CooldownTags))
+			if (UAbilitySystemComponent* AbilitySystemComponent = ActorInfo->AbilitySystemComponent.Get())
 			{
-				if (OptionalRelevantTags)
+				if (AbilitySystemComponent->HasAnyMatchingGameplayTags(*CooldownTags))
 				{
-					const FGameplayTag& FailCooldownTag = UAbilitySystemGlobals::Get().ActivateFailCooldownTag;
-					if (FailCooldownTag.IsValid())
+					if (OptionalRelevantTags)
 					{
-						OptionalRelevantTags->AddTag(FailCooldownTag);
+						const FGameplayTag& FailCooldownTag = UAbilitySystemGlobals::Get().ActivateFailCooldownTag;
+						if (FailCooldownTag.IsValid())
+						{
+							OptionalRelevantTags->AddTag(FailCooldownTag);
+						}
+
+						// Let the caller know which tags were blocking
+						OptionalRelevantTags->AppendMatchingTags(AbilitySystemComponent->GetOwnedGameplayTags(), *CooldownTags);
 					}
 
-					// Let the caller know which tags were blocking
-					OptionalRelevantTags->AppendMatchingTags(AbilitySystemComponent->GetOwnedGameplayTags(), *CooldownTags);
+					return false;
 				}
-
-				return false;
 			}
+		}
+		else if (UE::AbilitySystem::Private::CVarWarnCooldownEffectWithoutTagsValue > 0 && CooldownGameplayEffectClass != nullptr)
+		{
+			// Unless this function is overridden, a CooldownGameplayEffectClass that doesn't grant tags isn't effective as cooldown. 
+			// Log a runtime warning when an ability's cooldown is checked while having this misconfiguration.
+			UE_LOG(LogAbilitySystem, Warning, TEXT("CooldownGameplayEffectClass '%s' grants no tags. A GameplayEffect class must grant tags (Component: Grant Tags to Target Actor) to be used as cooldown."), *CooldownGameplayEffectClass->GetName());
 		}
 	}
 	return true;
@@ -1672,8 +1700,15 @@ void UGameplayAbility::AddAbilityTaskDebugMessage(UGameplayTask* AbilityTask, FS
 	Msg.Message = FString::Printf(TEXT("{%s} %s"), AbilityTask ? *AbilityTask->GetDebugString() : TEXT(""), *DebugMessage);
 }
 
+#if WITH_EDITOR
+FGameplayTagContainer& UGameplayAbility::EditorGetAssetTags()
+{
+	return AbilityTags;
+}
+#endif //WITH_EDITOR
+
 /**
- *	Helper methods for adding GaAmeplayCues without having to go through GameplayEffects.
+ *	Helper methods for adding GameplayCues without having to go through GameplayEffects.
  *	For now, none of these will happen predictively. We can eventually build this out more to 
  *	work with the PredictionKey system.
  */
@@ -2022,8 +2057,14 @@ FActiveGameplayEffectHandle UGameplayAbility::ApplyGameplayEffectSpecToOwner(con
 	if (SpecHandle.IsValid() && (HasAuthorityOrPredictionKey(ActorInfo, &ActivationInfo)))
 	{
 		UAbilitySystemComponent* const AbilitySystemComponent = ActorInfo->AbilitySystemComponent.Get();
-		return AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get(), AbilitySystemComponent->GetPredictionKeyForNewAction());
+		FActiveGameplayEffectHandle ReturnHandle = AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get(), AbilitySystemComponent->GetPredictionKeyForNewAction());
 
+		// Force a net update for predicted effects so that short durations are replicated correctly
+		if (ReturnHandle.IsValid() && ActorInfo && ActorInfo->OwnerActor.IsValid() && ActorInfo->OwnerActor->HasAuthority())
+		{
+			AbilitySystemComponent->GetOwner()->ForceNetUpdate();
+		}
+		return ReturnHandle;
 	}
 	return FActiveGameplayEffectHandle();
 }
@@ -2191,7 +2232,7 @@ float UGameplayAbility::GetCooldownTimeRemaining() const
 void UGameplayAbility::SetRemoteInstanceHasEnded()
 {
 	// This could potentially happen in shutdown corner cases
-	if (!IsValid(this) || CurrentActorInfo == nullptr)
+	if (!IsValidChecked(this) || CurrentActorInfo == nullptr)
 	{
 		return;
 	}
@@ -2220,7 +2261,7 @@ void UGameplayAbility::SetRemoteInstanceHasEnded()
 void UGameplayAbility::NotifyAvatarDestroyed()
 {
 	// This could potentially happen in shutdown corner cases
-	if (!IsValid(this) || CurrentActorInfo == nullptr)
+	if (!IsValidChecked(this) || CurrentActorInfo == nullptr)
 	{
 		return;
 	}
@@ -2284,12 +2325,10 @@ void UGameplayAbility::GetLifetimeReplicatedProps(TArray< class FLifetimePropert
 	}
 }
 
-#if UE_WITH_IRIS
 void UGameplayAbility::RegisterReplicationFragments(UE::Net::FFragmentRegistrationContext& Context, UE::Net::EFragmentRegistrationFlags RegistrationFlags)
 {
 	// Build descriptors and allocate PropertyReplicationFragments for this object
 	UE::Net::FReplicationFragmentUtil::CreateAndRegisterFragmentsForObject(this, Context, RegistrationFlags);
 }
-#endif // UE_WITH_IRIS
 
 #undef LOCTEXT_NAMESPACE

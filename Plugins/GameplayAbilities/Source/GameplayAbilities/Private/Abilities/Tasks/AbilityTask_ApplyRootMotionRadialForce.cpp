@@ -55,7 +55,7 @@ void UAbilityTask_ApplyRootMotionRadialForce::SharedInitAndApply()
 		StartTime = GetWorld()->GetTimeSeconds();
 		EndTime = StartTime + Duration;
 
-		if (MovementComponent)
+		if (MovementComponent.IsValid())
 		{
 			ForceName = ForceName.IsNone() ? FName("AbilityTaskApplyRootMotionRadialForce") : ForceName;
 			TSharedPtr<FRootMotionSource_RadialForce> RadialForce = MakeShared<FRootMotionSource_RadialForce>();
@@ -150,7 +150,7 @@ void UAbilityTask_ApplyRootMotionRadialForce::PreDestroyFromReplication()
 
 void UAbilityTask_ApplyRootMotionRadialForce::OnDestroy(bool AbilityIsEnding)
 {
-	if (MovementComponent)
+	if (MovementComponent.IsValid())
 	{
 		MovementComponent->RemoveRootMotionSourceByID(RootMotionSourceID);
 	}

@@ -5,7 +5,6 @@
 #include "ActiveGameplayEffectHandle.h"
 #include "CoreMinimal.h"
 #include "GameplayEffectAttributeCaptureDefinition.h"
-#include "UObject/ObjectMacros.h"
 #include "UObject/Object.h"
 #include "UObject/Class.h"
 #include "Templates/SubclassOf.h"
@@ -13,8 +12,11 @@
 #include "GameFramework/Actor.h"
 #include "GameplayTagContainer.h"
 #include "AttributeSet.h"
+#include "Net/Serialization/FastArraySerializer.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "GameplayEffectTypes.generated.h"
+
+#define UE_API GAMEPLAYABILITIES_API
 
 #define SKILL_SYSTEM_AGGREGATOR_DEBUG 1
 
@@ -33,8 +35,10 @@ struct FGameplayEffectModCallbackData;
 struct FGameplayEffectSpec;
 struct FHitResult;
 struct FMinimalReplicationTagCountMapForNetSerializer;
+struct FNetGameplayTagCountContainerStateForNetSerialize;
 namespace UE::Net
 {
+	struct FGameplayTagCountContainerNetSerializer;
 	struct FGameplayEffectContextHandleAccessorForNetSerializer;
 	class FMinimalReplicationTagCountMapReplicationFragment;
 }
@@ -44,7 +48,6 @@ GAMEPLAYABILITIES_API FString EGameplayModOpToString(int32 Type);
 GAMEPLAYABILITIES_API FString EGameplayModToString(int32 Type);
 GAMEPLAYABILITIES_API FString EGameplayModEffectToString(int32 Type);
 GAMEPLAYABILITIES_API FString EGameplayCueEventToString(int32 Type);
-
 
 /** Valid gameplay modifier evaluation channels; Displayed and renamed via game-specific aliases and options */
 UENUM()
@@ -68,12 +71,12 @@ enum class EGameplayModEvaluationChannel : uint8
 
 /** Struct representing evaluation channel settings for a gameplay modifier */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayModEvaluationChannelSettings
+struct FGameplayModEvaluationChannelSettings
 {
 	GENERATED_USTRUCT_BODY()
 	
 	/** Constructor */
-	FGameplayModEvaluationChannelSettings();
+	UE_API FGameplayModEvaluationChannelSettings();
 
 	/**
 	 * Get the modifier evaluation channel to use
@@ -81,18 +84,18 @@ struct GAMEPLAYABILITIES_API FGameplayModEvaluationChannelSettings
 	 * @return	Either the channel directly specified within the settings, if valid, or Channel0 in the event of a game not using modifier
 	 *			channels or in the case of an invalid channel being specified within the settings
 	 */
-	EGameplayModEvaluationChannel GetEvaluationChannel() const;
+	UE_API EGameplayModEvaluationChannel GetEvaluationChannel() const;
 
 	/** Editor-only constants to aid in hiding evaluation channel settings when appropriate */
 #if WITH_EDITORONLY_DATA
-	static const FName ForceHideMetadataKey;
-	static const FString ForceHideMetadataEnabledValue;
+	static UE_API const FName ForceHideMetadataKey;
+	static UE_API const FString ForceHideMetadataEnabledValue;
 #endif // #if WITH_EDITORONLY_DATA
 
-	void SetEvaluationChannel(EGameplayModEvaluationChannel NewChannel);
+	UE_API void SetEvaluationChannel(EGameplayModEvaluationChannel NewChannel);
 
-	bool operator==(const FGameplayModEvaluationChannelSettings& Other) const;
-	bool operator!=(const FGameplayModEvaluationChannelSettings& Other) const;
+	UE_API bool operator==(const FGameplayModEvaluationChannelSettings& Other) const;
+	UE_API bool operator!=(const FGameplayModEvaluationChannelSettings& Other) const;
 
 protected:
 
@@ -169,16 +172,18 @@ namespace GameplayEffectUtilities
 	GAMEPLAYABILITIES_API float ComputeStackedModifierMagnitude(float BaseComputedMagnitude, int32 StackCount, EGameplayModOp::Type ModOp);
 }
 
-/** Enumeration for ways a single GameplayEffect asset can stack. */
+/** Defines how multiple instances of the same GameplayEffect definition stack when applied (non-instant GE's). */
 UENUM()
 enum class EGameplayEffectStackingType : uint8
 {
-	/** No stacking. Multiple applications of this GameplayEffect are treated as separate instances. */
-	None,
-	/** Each caster has its own stack. */
-	AggregateBySource,
-	/** Each target has its own stack. */
-	AggregateByTarget,
+	/** No stacking. Each application is a separate instance. */
+	None UMETA(DisplayName = "No Stacking"),
+
+	/** Stacks only when the same source reapplies the effect. */
+	AggregateBySource UMETA(DisplayName = "Stack Per Source"),
+
+	/** Stacks only when the effect is reapplied to the same target. */
+	AggregateByTarget UMETA(DisplayName = "Stack Per Target"),
 };
 
 
@@ -240,7 +245,7 @@ struct FGameplayModifierEvaluatedData
  * It is passed throughout effect execution so it is a great place to track transient information about an execution
  */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayEffectContext
+struct FGameplayEffectContext
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -270,13 +275,13 @@ struct GAMEPLAYABILITIES_API FGameplayEffectContext
 	}
 
 	/** Returns the list of gameplay tags applicable to this effect, defaults to the owner's tags. SpecTagContainer remains untouched by default. */
-	virtual void GetOwnedGameplayTags(OUT FGameplayTagContainer& ActorTagContainer, OUT FGameplayTagContainer& SpecTagContainer) const;
+	UE_API virtual void GetOwnedGameplayTags(OUT FGameplayTagContainer& ActorTagContainer, OUT FGameplayTagContainer& SpecTagContainer) const;
 
 	/** Sets the instigator and effect causer. Instigator is who owns the ability that spawned this, EffectCauser is the actor that is the physical source of the effect, such as a weapon. They can be the same. */
-	virtual void AddInstigator(class AActor *InInstigator, class AActor *InEffectCauser);
+	UE_API virtual void AddInstigator(class AActor *InInstigator, class AActor *InEffectCauser);
 
 	/** Sets the ability that was used to spawn this */
-	virtual void SetAbility(const UGameplayAbility* InGameplayAbility);
+	UE_API virtual void SetAbility(const UGameplayAbility* InGameplayAbility);
 
 	/** Returns the immediate instigator that applied this effect */
 	virtual AActor* GetInstigator() const
@@ -285,10 +290,10 @@ struct GAMEPLAYABILITIES_API FGameplayEffectContext
 	}
 
 	/** Returns the CDO of the ability used to instigate this context */
-	const UGameplayAbility* GetAbility() const;
+	UE_API const UGameplayAbility* GetAbility() const;
 
 	/** Returns the specific instance that instigated this, may not always be set */
-	const UGameplayAbility* GetAbilityInstance_NotReplicated() const;
+	UE_API const UGameplayAbility* GetAbilityInstance_NotReplicated() const;
 
 	/** Gets the ability level this was evaluated at */
 	int32 GetAbilityLevel() const
@@ -341,10 +346,10 @@ struct GAMEPLAYABILITIES_API FGameplayEffectContext
 	}
 
 	/** Add actors to the stored actor list */
-	virtual void AddActors(const TArray<TWeakObjectPtr<AActor>>& IActor, bool bReset = false);
+	UE_API virtual void AddActors(const TArray<TWeakObjectPtr<AActor>>& IActor, bool bReset = false);
 
 	/** Add a hit result for targeting */
-	virtual void AddHitResult(const FHitResult& InHitResult, bool bReset = false);
+	UE_API virtual void AddHitResult(const FHitResult& InHitResult, bool bReset = false);
 
 	/** Returns actor list, may be empty */
 	virtual const TArray<TWeakObjectPtr<AActor>>& GetActors() const
@@ -365,7 +370,7 @@ struct GAMEPLAYABILITIES_API FGameplayEffectContext
 	}
 
 	/** Adds an origin point */
-	virtual void AddOrigin(FVector InOrigin);
+	UE_API virtual void AddOrigin(FVector InOrigin);
 
 	/** Returns origin point, may be invalid if HasOrigin is false */
 	virtual const FVector& GetOrigin() const
@@ -380,7 +385,7 @@ struct GAMEPLAYABILITIES_API FGameplayEffectContext
 	}
 
 	/** Returns debug string */
-	virtual FString ToString() const;
+	UE_API virtual FString ToString() const;
 
 	/** Returns the actual struct used for serialization, subclasses must override this! */
 	virtual UScriptStruct* GetScriptStruct() const
@@ -402,16 +407,16 @@ struct GAMEPLAYABILITIES_API FGameplayEffectContext
 	}
 
 	/** True if this was instigated by a locally controlled actor */
-	virtual bool IsLocallyControlled() const;
+	UE_API virtual bool IsLocallyControlled() const;
 
 	/** True if this was instigated by a locally controlled player */
-	virtual bool IsLocallyControlledPlayer() const;
+	UE_API virtual bool IsLocallyControlledPlayer() const;
 
 	/** Custom serialization, subclasses must override this */
-	virtual bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API virtual bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 protected:
-	static bool CanActorReferenceBeReplicated(const AActor* Actor);
+	static UE_API bool CanActorReferenceBeReplicated(const AActor* Actor);
 
 	// The object pointers here have to be weak because contexts aren't necessarily tracked by GC in all cases
 
@@ -485,7 +490,7 @@ struct TStructOpsTypeTraits< FGameplayEffectContext > : public TStructOpsTypeTra
  * Handle that wraps a FGameplayEffectContext or subclass, to allow it to be polymorphic and replicate properly
  */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayEffectContextHandle
+struct FGameplayEffectContextHandle
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -784,7 +789,7 @@ struct GAMEPLAYABILITIES_API FGameplayEffectContextHandle
 	}
 
 	/** Custom serializer, handles polymorphism of context */
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 private:
 	friend UE::Net::FGameplayEffectContextHandleAccessorForNetSerializer;
@@ -814,6 +819,10 @@ struct FGameplayEffectRemovalInfo
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Removal")
 	bool bPrematureRemoval = false;
 
+	/** True when the effect is being removed due to prediction rejection */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Removal")
+	bool bPredictionRejected = false;
+
 	/** Number of Stacks this gameplay effect had before it was removed. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Removal")
 	int32 StackCount = 0;
@@ -821,7 +830,7 @@ struct FGameplayEffectRemovalInfo
 	/** Actor this gameplay effect was targeting. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Removal")
 	FGameplayEffectContextHandle EffectContext;
-
+	
 	/** The Effect being Removed */
 	const FActiveGameplayEffect* ActiveEffect = nullptr;
 };
@@ -829,7 +838,7 @@ struct FGameplayEffectRemovalInfo
 
 /** Metadata about a gameplay cue execution */
 USTRUCT(BlueprintType, meta = (HasNativeBreak = "/Script/GameplayAbilities.AbilitySystemBlueprintLibrary.BreakGameplayCueParameters", HasNativeMake = "/Script/GameplayAbilities.AbilitySystemBlueprintLibrary.MakeGameplayCueParameters"))
-struct GAMEPLAYABILITIES_API FGameplayCueParameters
+struct FGameplayCueParameters
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -843,10 +852,10 @@ struct GAMEPLAYABILITIES_API FGameplayCueParameters
 	{}
 
 	/** Projects can override this via UAbilitySystemGlobals */
-	FGameplayCueParameters(const struct FGameplayEffectSpecForRPC &Spec);
-	FGameplayCueParameters(const struct FGameplayEffectContextHandle& EffectContext);
+	UE_API FGameplayCueParameters(const struct FGameplayEffectSpecForRPC &Spec);
+	UE_API FGameplayCueParameters(const struct FGameplayEffectContextHandle& EffectContext);
 
-	bool operator==(const FGameplayCueParameters& Other) const;
+	UE_API bool operator==(const FGameplayCueParameters& Other) const;
 	bool operator!=(const FGameplayCueParameters& Other) const
 	{
 		return !(*this == Other);
@@ -924,22 +933,22 @@ struct GAMEPLAYABILITIES_API FGameplayCueParameters
 	bool bGameplayEffectActive = true;
 
 	/** Optimized serializer */
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	/** Returns true if this is locally controlled, using fallback actor if nothing else available */
-	bool IsInstigatorLocallyControlled(AActor* FallbackActor = nullptr) const;
+	UE_API bool IsInstigatorLocallyControlled(AActor* FallbackActor = nullptr) const;
 
 	/** Fallback actor is used if the parameters have nullptr for instigator and effect causer */
-	bool IsInstigatorLocallyControlledPlayer(AActor* FallbackActor=nullptr) const;
+	UE_API bool IsInstigatorLocallyControlledPlayer(AActor* FallbackActor=nullptr) const;
 
 	/** Returns the actor that instigated this originally, generally attached to an ability system component */
-	AActor* GetInstigator() const;
+	UE_API AActor* GetInstigator() const;
 
 	/** Returns the actor that physically caused the damage, could be a projectile or weapon */
-	AActor* GetEffectCauser() const;
+	UE_API AActor* GetEffectCauser() const;
 
 	/** Returns the object that originally caused this, game-specific but usually not an actor */
-	const UObject* GetSourceObject() const;
+	UE_API const UObject* GetSourceObject() const;
 };
 
 template<>
@@ -1034,15 +1043,64 @@ namespace EGameplayTagEventType
 }
 
 /**
+ * Enum to describe replication rules for each tag
+ * Any state besides "None" must be added on the server and can be predicted on clients.
+ */
+UENUM()
+enum class EGameplayTagReplicationState : uint8
+{
+	None,				// Tag will not replicate
+	TagOnly,			// Tag will replicate to all without count
+	CountToOwner,		// Tag will replicate to all and Count will replicate to owner, Functions same as TagAndCountToAll with Iris
+	TagAndCountToAll	// Tag and Count will replicate to all
+};
+
+USTRUCT()
+struct FGameplayTagCountItem
+{
+	GENERATED_USTRUCT_BODY()
+	
+	FGameplayTagCountItem()
+	: Tag(FGameplayTag())
+	, Count(0)
+	, ReplicationState(EGameplayTagReplicationState::None)
+	{}
+
+	FGameplayTagCountItem(const FGameplayTag& InTag, const int32 InCount = 1, EGameplayTagReplicationState TagRepState = EGameplayTagReplicationState::None)
+	: Tag(InTag)
+	, Count(InCount)
+	, ReplicationState(TagRepState)
+	{}
+
+	UPROPERTY()
+	FGameplayTag Tag;
+
+	UPROPERTY()
+	int32 Count;
+
+	EGameplayTagReplicationState ReplicationState;
+
+	bool operator == (const FGameplayTagCountItem& Other) const
+	{
+		return Tag.MatchesTagExact(Other.Tag);
+	}
+
+	bool operator == (const FGameplayTag& OtherTag) const
+	{
+		return Tag.MatchesTagExact(OtherTag);
+	}
+};
+
+/**
  * Struct that tracks the number/count of tag applications within it. Explicitly tracks the tags added or removed,
  * while simultaneously tracking the count of parent tags as well. Events/delegates are fired whenever the tag counts
  * of any tag (explicit or parent) are modified.
  */
-struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
-{	
-	FGameplayTagCountContainer()
-	{}
-
+USTRUCT()
+struct FGameplayTagCountContainer
+{
+	GENERATED_BODY()
+	
 	/**
 	 * Check if the count container has a gameplay tag that matches against the specified tag (expands to include parents of asset tags)
 	 * 
@@ -1050,7 +1108,7 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @return True if the count container has a gameplay tag that matches, false if not
 	 */
-	FORCEINLINE bool HasMatchingGameplayTag(FGameplayTag TagToCheck) const
+	inline bool HasMatchingGameplayTag(FGameplayTag TagToCheck) const
 	{
 		return GameplayTagCountMap.FindRef(TagToCheck) > 0;
 	}
@@ -1062,7 +1120,7 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @return True if the count container matches all of the gameplay tags
 	 */
-	FORCEINLINE bool HasAllMatchingGameplayTags(const FGameplayTagContainer& TagContainer) const
+	inline bool HasAllMatchingGameplayTags(const FGameplayTagContainer& TagContainer) const
 	{
 		// if the TagContainer count is 0 return bCountEmptyAsMatch;
 		if (TagContainer.Num() == 0)
@@ -1089,7 +1147,7 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @return True if the count container matches any of the gameplay tags
 	 */
-	FORCEINLINE bool HasAnyMatchingGameplayTags(const FGameplayTagContainer& TagContainer) const
+	inline bool HasAnyMatchingGameplayTags(const FGameplayTagContainer& TagContainer) const
 	{
 		if (TagContainer.Num() == 0)
 		{
@@ -1114,7 +1172,7 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * @param Container		Container of tags to update
 	 * @param CountDelta	Delta of the tag count to apply
 	 */
-	FORCEINLINE void UpdateTagCount(const FGameplayTagContainer& Container, int32 CountDelta)
+	inline void UpdateTagCount(const FGameplayTagContainer& Container, int32 CountDelta)
 	{
 		if (CountDelta != 0)
 		{
@@ -1122,7 +1180,7 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 			TArray<FDeferredTagChangeDelegate> DeferredTagChangeDelegates;
 			for (auto TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
 			{
-				bUpdatedAny |= UpdateTagMapDeferredParentRemoval_Internal(*TagIt, CountDelta, DeferredTagChangeDelegates);
+				bUpdatedAny |= UpdateTagMapDeferredParentRemoval_Internal(*TagIt, CountDelta, DeferredTagChangeDelegates, EGameplayTagReplicationState::None);
 			}
 
 			if (bUpdatedAny && CountDelta < 0)
@@ -1145,11 +1203,11 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @return True if tag was *either* added or removed. (E.g., we had the tag and now dont. or didnt have the tag and now we do. We didn't just change the count (1 count -> 2 count would return false).
 	 */
-	FORCEINLINE bool UpdateTagCount(const FGameplayTag& Tag, int32 CountDelta)
+	inline bool UpdateTagCount(const FGameplayTag& Tag, int32 CountDelta, EGameplayTagReplicationState TagRepState)
 	{
-		if (CountDelta != 0)
+		if (Tag.IsValid() && CountDelta != 0)
 		{
-			return UpdateTagMap_Internal(Tag, CountDelta);
+			return UpdateTagMap_Internal(Tag, CountDelta, TagRepState);
 		}
 
 		return false;
@@ -1165,11 +1223,11 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @return True if tag was *either* added or removed. (E.g., we had the tag and now dont. or didnt have the tag and now we do. We didn't just change the count (1 count -> 2 count would return false).
 	 */
-	FORCEINLINE bool UpdateTagCount_DeferredParentRemoval(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& DeferredTagChangeDelegates)
+	inline bool UpdateTagCount_DeferredParentRemoval(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& DeferredTagChangeDelegates)
 	{
 		if (CountDelta != 0)
 		{
-			return UpdateTagMapDeferredParentRemoval_Internal(Tag, CountDelta, DeferredTagChangeDelegates);
+			return UpdateTagMapDeferredParentRemoval_Internal(Tag, CountDelta, DeferredTagChangeDelegates, EGameplayTagReplicationState::None);
 		}
 
 		return false;
@@ -1180,21 +1238,28 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @param Tag			Tag to update
 	 * @param Count			New count of the tag
+	 * @param TagRepState	The replication state for the tag, if it is being added it will be added with this state
 	 * 
 	 * @return True if tag was *either* added or removed. (E.g., we had the tag and now dont. or didnt have the tag and now we do. We didn't just change the count (1 count -> 2 count would return false).
 	 */
-	FORCEINLINE bool SetTagCount(const FGameplayTag& Tag, int32 NewCount)
+	inline bool SetTagCount(const FGameplayTag& Tag, int32 NewCount, EGameplayTagReplicationState TagRepState = EGameplayTagReplicationState::None)
 	{
-		int32 ExistingCount = 0;
-		if (int32* Ptr  = ExplicitTagCountMap.Find(Tag))
+		if (!Tag.IsValid())
 		{
-			ExistingCount = *Ptr;
+			return false;
+		}
+
+		int32 ExistingCount = 0;
+		const int32 Idx  = Items.Find(Tag);
+		if (Idx != INDEX_NONE)
+		{
+			ExistingCount = Items[Idx].Count;
 		}
 
 		int32 CountDelta = NewCount - ExistingCount;
 		if (CountDelta != 0)
 		{
-			return UpdateTagMap_Internal(Tag, CountDelta);
+			return UpdateTagMap_Internal(Tag, CountDelta, TagRepState);
 		}
 
 		return false;
@@ -1208,7 +1273,7 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	*
 	* @return the count of the passed in tag
 	*/
-	FORCEINLINE int32 GetTagCount(const FGameplayTag& Tag) const
+	inline int32 GetTagCount(const FGameplayTag& Tag) const
 	{
 		if (const int32* Ptr = GameplayTagCountMap.Find(Tag))
 		{
@@ -1226,21 +1291,28 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	*
 	* @return the count of the passed in tag
 	*/
-	FORCEINLINE int32 GetExplicitTagCount(const FGameplayTag& Tag) const
+	inline int32 GetExplicitTagCount(const FGameplayTag& Tag) const
 	{
-		if (const int32* Ptr = ExplicitTagCountMap.Find(Tag))
+		const int32 Idx  = Items.Find(Tag);
+		if (Idx != INDEX_NONE)
 		{
-			return *Ptr;
+			return Items[Idx].Count;
 		}
 
 		return 0;
+	}
+
+	/** Fills in ParentTags from GameplayTags */
+	void FillParentTags()
+	{
+		ExplicitTags.FillParentTags();
 	}
 
 	/**
 	 *	Broadcasts the AnyChange event for this tag. This is called when the stack count of the backing gameplay effect change.
 	 *	It is up to the receiver of the broadcasted delegate to decide what to do with this.
 	 */
-	void Notify_StackCountChange(const FGameplayTag& Tag);
+	UE_API void Notify_StackCountChange(const FGameplayTag& Tag);
 
 	/**
 	 * Return delegate that can be bound to for when the specific tag's count changes to or off of zero
@@ -1249,7 +1321,7 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @return Delegate for when the specified tag's count changes to or off of zero
 	 */
-	FOnGameplayEffectTagCountChanged& RegisterGameplayTagEvent(const FGameplayTag& Tag, EGameplayTagEventType::Type EventType=EGameplayTagEventType::NewOrRemoved);
+	UE_API FOnGameplayEffectTagCountChanged& RegisterGameplayTagEvent(const FGameplayTag& Tag, EGameplayTagEventType::Type EventType=EGameplayTagEventType::NewOrRemoved);
 	
 	/**
 	 * Return delegate that can be bound to for when the any tag's count changes to or off of zero
@@ -1272,15 +1344,36 @@ struct GAMEPLAYABILITIES_API FGameplayTagCountContainer
 	 * 
 	 * @param bResetCallbacks	If true, also remove all of the registered tag count change delegates
 	 */
-	void Reset(bool bResetCallbacks = true);
+	UE_API void Reset(bool bResetCallbacks = true);
 
-	/** Fills in ParentTags from GameplayTags */
-	void FillParentTags()
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParams);
+
+	UE_API void SetOwner(UAbilitySystemComponent* ASC);
+
+	bool operator==(const FGameplayTagCountContainer& Other) const
 	{
-		ExplicitTags.FillParentTags();
+		if (Items.Num() != Other.Items.Num())
+		{
+			return false;
+		}
+
+		int32 Idx = INDEX_NONE;
+		for (const FGameplayTagCountItem& Item : Items)
+		{
+			Idx = Other.Items.Find(Item);
+			if (Idx == INDEX_NONE || Item.Count != Other.Items[Idx].Count)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 private:
+
+	friend UE::Net::FGameplayTagCountContainerNetSerializer;
+	friend FNetGameplayTagCountContainerStateForNetSerialize;
 
 	struct FDelegateInfo
 	{
@@ -1288,14 +1381,14 @@ private:
 		FOnGameplayEffectTagCountChanged	OnAnyChange;
 	};
 
+	/** Array of explicit tags and their count */
+	TArray<FGameplayTagCountItem> Items;
+
 	/** Map of tag to delegate that will be fired when the count for the key tag changes to or away from zero */
 	TMap<FGameplayTag, FDelegateInfo> GameplayTagEventMap;
 
 	/** Map of tag to active count of that tag */
 	TMap<FGameplayTag, int32> GameplayTagCountMap;
-
-	/** Map of tag to explicit count of that tag. Cannot share with above map because it's not safe to merge explicit and generic counts */	
-	TMap<FGameplayTag, int32> ExplicitTagCountMap;
 
 	/** Delegate fired whenever any tag's count changes to or away from zero */
 	FOnGameplayEffectTagCountChanged OnAnyTagChangeDelegate;
@@ -1303,19 +1396,31 @@ private:
 	/** Container of tags that were explicitly added */
 	FGameplayTagContainer ExplicitTags;
 
+	/** We want to track the owner for the container so that we can give valuable logging about tag replication mismatches. */
+	UPROPERTY()
+	TObjectPtr<class UAbilitySystemComponent> Owner;
+
 	/** Internal helper function to adjust the explicit tag list & corresponding maps/delegates/etc. as necessary */
-	bool UpdateTagMap_Internal(const FGameplayTag& Tag, int32 CountDelta);
+	UE_API bool UpdateTagMap_Internal(const FGameplayTag& Tag, int32 CountDelta, EGameplayTagReplicationState TagRepState = EGameplayTagReplicationState::None);
 
 	/** Internal helper function to adjust the explicit tag list & corresponding maps/delegates/etc. as necessary. This does not call FillParentTags or any of the tag change delegates. These delegates are returned and must be executed by the caller. */
-	bool UpdateTagMapDeferredParentRemoval_Internal(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& DeferredTagChangeDelegates);
+	UE_API bool UpdateTagMapDeferredParentRemoval_Internal(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& DeferredTagChangeDelegates, EGameplayTagReplicationState TagRepState = EGameplayTagReplicationState::None);
 
 	/** Internal helper function to adjust the explicit tag list & corresponding map. */
-	bool UpdateExplicitTags(const FGameplayTag& Tag, int32 CountDelta, bool bDeferParentTagsOnRemove);
+	UE_API bool UpdateExplicitTags(const FGameplayTag& Tag, int32 CountDelta, bool bDeferParentTagsOnRemove, EGameplayTagReplicationState TagRepState = EGameplayTagReplicationState::None);
 
 	/** Internal helper function to collect the delegates that need to be called when Tag has its count changed by CountDelta. */
-	bool GatherTagChangeDelegates(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& TagChangeDelegates);
+	UE_API bool GatherTagChangeDelegates(const FGameplayTag& Tag, int32 CountDelta, TArray<FDeferredTagChangeDelegate>& TagChangeDelegates, EGameplayTagReplicationState TagRepState);
 };
 
+template<>
+struct TStructOpsTypeTraits< FGameplayTagCountContainer > : public TStructOpsTypeTraitsBase2< FGameplayTagCountContainer >
+{
+	enum 
+	{
+		WithNetDeltaSerializer = true,
+   };
+};
 
 /**
  * Struct used to update a blueprint property with a gameplay tag count.
@@ -1323,7 +1428,7 @@ private:
  * It only supports boolean, integer, and float properties.
  */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayTagBlueprintPropertyMapping
+struct FGameplayTagBlueprintPropertyMapping
 {
 	GENERATED_BODY()
 
@@ -1370,39 +1475,39 @@ public:
  * to bind the delegate and it's address could change causing an invalid binding.
  */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayTagBlueprintPropertyMap
+struct FGameplayTagBlueprintPropertyMap
 {
 	GENERATED_BODY()
 
 public:
 
-	FGameplayTagBlueprintPropertyMap();
-	FGameplayTagBlueprintPropertyMap(const FGameplayTagBlueprintPropertyMap& Other);
-	~FGameplayTagBlueprintPropertyMap();
+	UE_API FGameplayTagBlueprintPropertyMap();
+	UE_API FGameplayTagBlueprintPropertyMap(const FGameplayTagBlueprintPropertyMap& Other);
+	UE_API ~FGameplayTagBlueprintPropertyMap();
 
 	/** Call this to initialize and bind the properties with the ability system component. */
-	void Initialize(UObject* Owner, class UAbilitySystemComponent* ASC);
+	UE_API void Initialize(UObject* Owner, class UAbilitySystemComponent* ASC);
 
 	/** Call to manually apply the current tag state, can handle cases where callbacks were skipped */
-	void ApplyCurrentTags();
+	UE_API void ApplyCurrentTags();
 
 #if WITH_EDITOR
 	UE_DEPRECATED(5.3, "The signature for IsDataValid has changed.  Please use the one that takes a FDataValidationContext")
 	EDataValidationResult IsDataValid(const UObject* ContainingAsset, TArray<FText>& ValidationErrors) { return EDataValidationResult::NotValidated; }
 
 	/** This can optionally be called in the owner's IsDataValid() for data validation. */
-	EDataValidationResult IsDataValid(const UObject* ContainingAsset, class FDataValidationContext& Context) const;
+	UE_API EDataValidationResult IsDataValid(const UObject* ContainingAsset, class FDataValidationContext& Context) const;
 #endif // #if WITH_EDITOR
 
 protected:
 
-	void Unregister();
+	UE_API void Unregister();
 
-	void GameplayTagEventCallback(const FGameplayTag Tag, int32 NewCount, TWeakObjectPtr<UObject> RegisteredOwner);
+	UE_API void GameplayTagEventCallback(const FGameplayTag Tag, int32 NewCount, TWeakObjectPtr<UObject> RegisteredOwner);
 
-	bool IsPropertyTypeValid(const FProperty* Property) const;
+	UE_API bool IsPropertyTypeValid(const FProperty* Property) const;
 
-	EGameplayTagEventType::Type GetGameplayTagEventType(const FProperty* Property) const;
+	UE_API EGameplayTagEventType::Type GetGameplayTagEventType(const FProperty* Property) const;
 
 protected:
 
@@ -1416,7 +1521,7 @@ protected:
 
 /** Encapsulate require and ignore tags */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayTagRequirements
+struct FGameplayTagRequirements
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -1433,25 +1538,25 @@ struct GAMEPLAYABILITIES_API FGameplayTagRequirements
 	FGameplayTagQuery TagQuery;
 
 	/** True if all required tags and no ignore tags found */
-	bool	RequirementsMet(const FGameplayTagContainer& Container) const;
+	UE_API bool	RequirementsMet(const FGameplayTagContainer& Container) const;
 
 	/** True if neither RequireTags or IgnoreTags has any tags */
-	bool	IsEmpty() const;
+	UE_API bool	IsEmpty() const;
 
 	/** Return debug string */
-	FString ToString() const;
+	UE_API FString ToString() const;
 
-	bool operator==(const FGameplayTagRequirements& Other) const;
-	bool operator!=(const FGameplayTagRequirements& Other) const;
+	UE_API bool operator==(const FGameplayTagRequirements& Other) const;
+	UE_API bool operator!=(const FGameplayTagRequirements& Other) const;
 
 	/** Converts the RequireTags and IgnoreTags fields into an equivalent FGameplayTagQuery */
-	[[nodiscard]] FGameplayTagQuery ConvertTagFieldsToTagQuery() const;
+	[[nodiscard]] UE_API FGameplayTagQuery ConvertTagFieldsToTagQuery() const;
 };
 
 
 /** Structure used to combine tags from different sources during effect execution */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FTagContainerAggregator
+struct FTagContainerAggregator
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -1492,15 +1597,15 @@ struct GAMEPLAYABILITIES_API FTagContainerAggregator
 	}
 
 	/** Returns tags from the source or target actor */
-	FGameplayTagContainer& GetActorTags();
-	const FGameplayTagContainer& GetActorTags() const;
+	UE_API FGameplayTagContainer& GetActorTags();
+	UE_API const FGameplayTagContainer& GetActorTags() const;
 
 	/** Get tags that came from the effect spec */
-	FGameplayTagContainer& GetSpecTags();
-	const FGameplayTagContainer& GetSpecTags() const;
+	UE_API FGameplayTagContainer& GetSpecTags();
+	UE_API const FGameplayTagContainer& GetSpecTags() const;
 
 	/** Returns combination of spec and actor tags */
-	const FGameplayTagContainer* GetAggregatedTags() const;
+	UE_API const FGameplayTagContainer* GetAggregatedTags() const;
 
 private:
 
@@ -1521,12 +1626,12 @@ private:
 
 /** Allows blueprints to generate a GameplayEffectSpec once and then reference it by handle, to apply it multiple times/multiple targets. */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayEffectSpecHandle
+struct FGameplayEffectSpecHandle
 {
 	GENERATED_USTRUCT_BODY()
 
-	FGameplayEffectSpecHandle();
-	FGameplayEffectSpecHandle(FGameplayEffectSpec* DataPtr);
+	UE_API FGameplayEffectSpecHandle();
+	UE_API FGameplayEffectSpecHandle(FGameplayEffectSpec* DataPtr);
 
 	/** Internal pointer to effect spec */
 	TSharedPtr<FGameplayEffectSpec>	Data;
@@ -1541,7 +1646,7 @@ struct GAMEPLAYABILITIES_API FGameplayEffectSpecHandle
 		return Data.IsValid();
 	}
 
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	/** Comparison operator */
 	bool operator==(FGameplayEffectSpecHandle const& Other) const
@@ -1573,7 +1678,7 @@ struct TStructOpsTypeTraits<FGameplayEffectSpecHandle> : public TStructOpsTypeTr
 
 /** Map that stores count of tags, in a form that is optimized for replication */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FMinimalReplicationTagCountMap
+struct FMinimalReplicationTagCountMap
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -1585,11 +1690,16 @@ struct GAMEPLAYABILITIES_API FMinimalReplicationTagCountMap
 
 	void AddTag(const FGameplayTag& Tag)
 	{
+		if (!Tag.IsValid())
+		{
+			return;
+		}
+		
 		MapID++;
 		TagMap.FindOrAdd(Tag)++;
 	}
 
-	void RemoveTag(const FGameplayTag& Tag);
+	UE_API void RemoveTag(const FGameplayTag& Tag);
 
 	void AddTags(const FGameplayTagContainer& Container)
 	{
@@ -1609,6 +1719,11 @@ struct GAMEPLAYABILITIES_API FMinimalReplicationTagCountMap
 
 	void SetTagCount(const FGameplayTag& Tag, int32 NewCount)
 	{
+		if (!Tag.IsValid())
+		{
+			return;
+		}
+
 		MapID++;
 		int32& Count = TagMap.FindOrAdd(Tag);
 		Count = FMath::Max(0, NewCount);
@@ -1620,7 +1735,7 @@ struct GAMEPLAYABILITIES_API FMinimalReplicationTagCountMap
 		}
 	}
 
-	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	UE_API bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	TMap<FGameplayTag, int32>	TagMap;
 
@@ -1644,10 +1759,10 @@ struct GAMEPLAYABILITIES_API FMinimalReplicationTagCountMap
 	/** If true, we will skip updating the Owner ASC if we replicate on a connection owned by the ASC */
 	void SetRequireNonOwningNetConnection(bool b) { bRequireNonOwningNetConnection = b; }
 
-	void SetOwner(UAbilitySystemComponent* ASC);
+	UE_API void SetOwner(UAbilitySystemComponent* ASC);
 
 	// Removes all tags that this container is granting
-	void RemoveAllTags();
+	UE_API void RemoveAllTags();
 
 private:
 	friend FMinimalReplicationTagCountMapForNetSerializer;
@@ -1656,7 +1771,7 @@ private:
 	bool bRequireNonOwningNetConnection = false;
 	TWeakObjectPtr<UNetConnection> LastConnection;
 
-	void UpdateOwnerTagMap();
+	UE_API void UpdateOwnerTagMap();
 };
 
 template<>
@@ -1671,3 +1786,5 @@ struct TStructOpsTypeTraits<FMinimalReplicationTagCountMap> : public TStructOpsT
 };
 
 DECLARE_MULTICAST_DELEGATE(FOnExternalGameplayModifierDependencyChange);
+
+#undef UE_API

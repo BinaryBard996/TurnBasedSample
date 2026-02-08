@@ -4,6 +4,7 @@
 #include "AbilitySystemLog.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemStats.h"
+#include "Templates/Greater.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AbilityTask)
 
@@ -160,6 +161,12 @@ void UAbilityTask::BeginDestroy()
 			}
 		}
 	}
+}
+
+void UAbilityTask::PreDestroyFromReplication()
+{
+	// Clear the pointer without causing sideffects that a specialized EndTask() could cause.
+	Ability = nullptr;
 }
 
 FGameplayAbilitySpecHandle UAbilityTask::GetAbilitySpecHandle() const

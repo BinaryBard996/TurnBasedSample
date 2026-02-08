@@ -7,11 +7,13 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_PlayMontageAndWait.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FMontageWaitSimpleDelegate);
 
 /** Ability task to simply play a montage. Many games will want to make a modified version of this task that looks for game-specific events */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_PlayMontageAndWait : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_PlayMontageAndWait : public UAbilityTask
 {
 	GENERATED_BODY()
 public:
@@ -32,21 +34,21 @@ public:
 	FMontageWaitSimpleDelegate	OnCancelled;
 
 	UFUNCTION()
-	void OnMontageBlendedIn(UAnimMontage* Montage);
+	UE_API void OnMontageBlendedIn(UAnimMontage* Montage);
 
 	UFUNCTION()
-	void OnMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
+	UE_API void OnMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
 
 	UE_DEPRECATED(5.3, "Please use OnGameplayAbilityCancelled instead. This function naming implied the Montage was already interrupted (instead, we are about to interrupt it).")
 	UFUNCTION()
-	void OnMontageInterrupted();
+	UE_API void OnMontageInterrupted();
 
 	/** Callback function for when the owning Gameplay Ability is cancelled */
 	UFUNCTION()
-	void OnGameplayAbilityCancelled();
+	UE_API void OnGameplayAbilityCancelled();
 
 	UFUNCTION()
-	void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	UE_API void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
 	/** 
 	 * Start playing an animation montage on the avatar actor and wait for it to finish
@@ -65,22 +67,22 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (DisplayName="PlayMontageAndWait",
 		HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_PlayMontageAndWait* CreatePlayMontageAndWaitProxy(UGameplayAbility* OwningAbility,
+	static UE_API UAbilityTask_PlayMontageAndWait* CreatePlayMontageAndWaitProxy(UGameplayAbility* OwningAbility,
 		FName TaskInstanceName, UAnimMontage* MontageToPlay, float Rate = 1.f, FName StartSection = NAME_None, bool bStopWhenAbilityEnds = true, float AnimRootMotionTranslationScale = 1.f, float StartTimeSeconds = 0.f, bool bAllowInterruptAfterBlendOut = false);
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	/** Called when the ability is asked to cancel from an outside node. What this means depends on the individual task. By default, this does nothing other than ending the task. */
-	virtual void ExternalCancel() override;
+	UE_API virtual void ExternalCancel() override;
 
-	virtual FString GetDebugString() const override;
+	UE_API virtual FString GetDebugString() const override;
 
 protected:
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
 	/** Checks if the ability is playing a montage and stops that montage, returns true if a montage was stopped, false if not. */
-	bool StopPlayingMontage();
+	UE_API bool StopPlayingMontage();
 
 	FOnMontageBlendedInEnded BlendedInDelegate;
 	FOnMontageBlendingOutStarted BlendingOutDelegate;
@@ -108,3 +110,5 @@ protected:
 	UPROPERTY()
 	bool bAllowInterruptAfterBlendOut;
 };
+
+#undef UE_API

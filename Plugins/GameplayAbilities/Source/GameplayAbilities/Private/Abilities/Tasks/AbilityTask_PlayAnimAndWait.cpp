@@ -8,6 +8,8 @@
 #include "Animation/AnimSequence.h"
 #include "AbilitySystemLog.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AbilityTask_PlayAnimAndWait)
+
 void UAbilityTask_PlayAnimAndWait::OnMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted)
 {
 	if (Montage && Ability && Ability->GetCurrentMontage() == Montage)
@@ -84,24 +86,26 @@ UAbilityTask_PlayAnimAndWait* UAbilityTask_PlayAnimAndWait::CreatePlayAnimAndWai
 	FName TaskInstanceName, 
 	UAnimSequence* AnimSequence, 
 	FName SlotName, 
-	float BlendInTime, 
-	float BlendOutTime, 
-	float InPlayRate,
+	float BlendInTime /*= 0.25f*/,
+	float BlendOutTime /*= 0.25f*/,
+	float InPlayRate /*= 1.0f*/,
 	float StartTimeSeconds /*= 0.0f*/, 
 	bool bStopWhenAbilityEnds /*= true*/, 
-	float AnimRootMotionTranslationScale /*= 1.f*/)
+	float AnimRootMotionTranslationScale /*= 1.f*/,
+	float InPlayCount /*= 1.0f*/)
 {
-	UAbilityTask_PlayAnimAndWait* MyObj = NewAbilityTask<UAbilityTask_PlayAnimAndWait>(OwningAbility, TaskInstanceName);
-	MyObj->AnimSequenceToPlay = AnimSequence;
-	MyObj->SlotName = SlotName;
-	MyObj->BlendInTime = BlendInTime;
-	MyObj->BlendOutTime = BlendOutTime;
-	MyObj->PlayRate = InPlayRate;
-	MyObj->AnimRootMotionTranslationScale = AnimRootMotionTranslationScale;
-	MyObj->bStopWhenAbilityEnds = bStopWhenAbilityEnds;
-	MyObj->StartTimeSeconds = StartTimeSeconds;
+	UAbilityTask_PlayAnimAndWait* PlayAnimTask = NewAbilityTask<UAbilityTask_PlayAnimAndWait>(OwningAbility, TaskInstanceName);
+	PlayAnimTask->AnimSequenceToPlay = AnimSequence;
+	PlayAnimTask->SlotName = SlotName;
+	PlayAnimTask->BlendInTime = BlendInTime;
+	PlayAnimTask->BlendOutTime = BlendOutTime;
+	PlayAnimTask->PlayRate = InPlayRate;
+	PlayAnimTask->PlayCount = InPlayCount;
+	PlayAnimTask->AnimRootMotionTranslationScale = AnimRootMotionTranslationScale;
+	PlayAnimTask->bStopWhenAbilityEnds = bStopWhenAbilityEnds;
+	PlayAnimTask->StartTimeSeconds = StartTimeSeconds;
 
-	return MyObj;
+	return PlayAnimTask;
 }
 
 void UAbilityTask_PlayAnimAndWait::Activate()
@@ -119,7 +123,7 @@ void UAbilityTask_PlayAnimAndWait::Activate()
 		UAnimInstance* AnimInstance = ActorInfo->GetAnimInstance();
 		if (AnimInstance != nullptr)
 		{
-			UAnimMontage* NewDynamicMontage = ASC->PlaySlotAnimationAsDynamicMontage(Ability, Ability->GetCurrentActivationInfo(), AnimSequenceToPlay, SlotName, BlendInTime, BlendOutTime, PlayRate, StartTimeSeconds);
+			UAnimMontage* NewDynamicMontage = ASC->PlaySlotAnimationAsDynamicMontage_WithFractionalLoops(Ability, Ability->GetCurrentActivationInfo(), AnimSequenceToPlay, SlotName, BlendInTime, BlendOutTime, PlayRate, StartTimeSeconds, PlayCount);
 			if (NewDynamicMontage)
 			{
 				

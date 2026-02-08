@@ -159,7 +159,7 @@ void UAbilityTask_ApplyRootMotionMoveToActorForce::SharedInitAndApply()
 		StartTime = GetWorld()->GetTimeSeconds();
 		EndTime = StartTime + Duration;
 
-		if (MovementComponent)
+		if (MovementComponent.IsValid())
 		{
 			if (bSetNewMovementMode)
 			{
@@ -212,7 +212,7 @@ FVector UAbilityTask_ApplyRootMotionMoveToActorForce::CalculateTargetOffset() co
 	
 	if (OffsetAlignment == ERootMotionMoveToActorTargetOffsetType::AlignFromTargetToSource)
 	{
-		if (MovementComponent)
+		if (MovementComponent.IsValid())
 		{
 			FVector ToSource = MovementComponent->GetActorLocation() - TargetActorLocation;
 			ToSource.Z = 0.f;
@@ -285,7 +285,7 @@ bool UAbilityTask_ApplyRootMotionMoveToActorForce::UpdateTargetLocation(float De
 
 void UAbilityTask_ApplyRootMotionMoveToActorForce::SetRootMotionTargetLocation(FVector NewTargetLocation)
 {
-	if (MovementComponent)
+	if (MovementComponent.IsValid())
 	{
 		TSharedPtr<FRootMotionSource> RMS = MovementComponent->GetRootMotionSourceByID(RootMotionSourceID);
 		if (RMS.IsValid())
@@ -396,7 +396,7 @@ void UAbilityTask_ApplyRootMotionMoveToActorForce::OnDestroy(bool AbilityIsEndin
 		UAbilityTask_ApplyRootMotion_Base::OnTargetActorSwapped.Remove( TargetActorSwapHandle );
 	}
 
-	if (MovementComponent)
+	if (MovementComponent.IsValid())
 	{
 		MovementComponent->RemoveRootMotionSourceByID(RootMotionSourceID);
 

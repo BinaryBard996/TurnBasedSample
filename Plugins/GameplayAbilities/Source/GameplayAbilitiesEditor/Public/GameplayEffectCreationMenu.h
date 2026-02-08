@@ -5,6 +5,8 @@
 #include "GameplayEffect.h"
 #include "GameplayEffectCreationMenu.generated.h"
 
+#define UE_API GAMEPLAYABILITIESEDITOR_API
+
 class UGameplayEffect;
 
 USTRUCT()
@@ -25,23 +27,24 @@ struct FGameplayEffectCreationData
 };
 
 /** Container to hold EventKeywords for PIE testing */
-UCLASS(config=Game,defaultconfig)
-class GAMEPLAYABILITIESEDITOR_API UGameplayEffectCreationMenu : public UObject
+UCLASS(config=Game,defaultconfig, MinimalAPI)
+class UGameplayEffectCreationMenu : public UObject
 {
 	GENERATED_BODY()
 
 public:
 
-	UGameplayEffectCreationMenu();
+	UE_API UGameplayEffectCreationMenu();
 	
 	// Set this in your project to programatically define default GE names
-	static TFunction< FString(FString BaseName, FString Path) > GetDefaultAssetNameFunc;
+	static UE_API TFunction< FString(FString BaseName, FString Path) > GetDefaultAssetNameFunc;
 
 
 
-	void AddMenuExtensions() const;
+	UE_API void AddMenuExtensions() const;
 
 	UPROPERTY(config, EditAnywhere, Category="Gameplay Effect")
 	TArray<FGameplayEffectCreationData> Definitions;
 };
 
+#undef UE_API

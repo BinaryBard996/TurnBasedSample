@@ -8,6 +8,9 @@ namespace UnrealBuildTool.Rules
 		{
 			PublicDependencyModuleNames.Add("GameplayTasks");
 
+			// Allow access to Internal headers from GameplayTagsEditor
+			PrivateIncludePaths.Add(System.IO.Path.Combine(GetModuleDirectory("GameplayTagsEditor"), "Internal"));
+
 			PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{

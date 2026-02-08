@@ -3,6 +3,8 @@
 #include "GameplayEffectComponents/ChanceToApplyGameplayEffectComponent.h"
 #include "AbilitySystemComponent.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(ChanceToApplyGameplayEffectComponent)
+
 #if WITH_EDITOR
 #define GETCURVE_REPORTERROR_WITHPOSTLOAD(Handle) \
 	if (Handle.CurveTable) const_cast<UCurveTable*>(ToRawPtr(Handle.CurveTable))->ConditionalPostLoad(); \

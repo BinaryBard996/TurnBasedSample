@@ -43,7 +43,7 @@ bool FGameplayTagCountContainerTests::RunTest(const FString& Parameters)
 	TestTrue(TEXT("GetTagCount of Parent == 3"), TagCountContainer.GetTagCount(TestsDotGenericTag) == 3);
 
 	// Remove one
-	TagCountContainer.UpdateTagCount(TestsDotGenericTagDotOne, -1);
+	TagCountContainer.UpdateTagCount(TestsDotGenericTagDotOne, -1, EGameplayTagReplicationState::None);
 	TestFalse(TEXT("HasAllMatchingGameplayTags after Removing"), TagCountContainer.HasAllMatchingGameplayTags(ContainerOne));
 	TestFalse(TEXT("HasAnyMatchingGameplayTags after Removing"), TagCountContainer.HasAnyMatchingGameplayTags(ContainerOne));
 	TestTrue(TEXT("GetTagCount of One == 0"), TagCountContainer.GetTagCount(TestsDotGenericTagDotOne) == 0);

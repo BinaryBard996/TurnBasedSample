@@ -7,12 +7,14 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_PlayAnimAndWait.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FPlayAnimWaitSimpleDelegate);
 
 class UAnimSequence;
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_PlayAnimAndWait : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_PlayAnimAndWait : public UAbilityTask
 {
 	GENERATED_BODY()
 
@@ -33,16 +35,16 @@ public:
 	FPlayAnimWaitSimpleDelegate	OnCancelled;
 
 	UFUNCTION()
-	void OnMontageBlendedIn(UAnimMontage* Montage);
+	UE_API void OnMontageBlendedIn(UAnimMontage* Montage);
 
 	UFUNCTION()
-	void OnMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
+	UE_API void OnMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
 
 	UFUNCTION()
-	void OnMontageInterrupted();
+	UE_API void OnMontageInterrupted();
 
 	UFUNCTION()
-	void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	UE_API void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
 	/** 
 	 * Start playing an animation montage on the avatar actor and wait for it to finish
@@ -60,22 +62,22 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (DisplayName="Play Anim And Wait",
 		HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_PlayAnimAndWait* CreatePlayAnimAndWaitProxy(UGameplayAbility* OwningAbility,
-		FName TaskInstanceName, UAnimSequence* AnimSequence, FName SlotName = NAME_None, float BlendInTime = 0.25f, float BlendOutTime = 0.25f, float InPlayRate = 1.0f, float StartTimeSeconds = 0.0f, bool bStopWhenAbilityEnds = true, float AnimRootMotionTranslationScale = 1.0f);
+	static UE_API UAbilityTask_PlayAnimAndWait* CreatePlayAnimAndWaitProxy(UGameplayAbility* OwningAbility,
+		FName TaskInstanceName, UAnimSequence* AnimSequence, FName SlotName = NAME_None, float BlendInTime = 0.25f, float BlendOutTime = 0.25f, float InPlayRate = 1.0f, float StartTimeSeconds = 0.0f, bool bStopWhenAbilityEnds = true, float AnimRootMotionTranslationScale = 1.0f, float InPlayCount = 1.0f);
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	/** Called when the ability is asked to cancel from an outside node. What this means depends on the individual task. By default, this does nothing other than ending the task. */
-	virtual void ExternalCancel() override;
+	UE_API virtual void ExternalCancel() override;
 
-	virtual FString GetDebugString() const override;
+	UE_API virtual FString GetDebugString() const override;
 
 protected:
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
 	/** Checks if the ability is playing a montage and stops that montage, returns true if a montage was stopped, false if not. */
-	bool StopPlayingMontage();
+	UE_API bool StopPlayingMontage();
 
 	FOnMontageBlendingOutStarted BlendingOutDelegate;
 	FOnMontageBlendedInEnded BlendedInDelegate;
@@ -89,7 +91,10 @@ protected:
 	float BlendInTime = 0.25f;
 	float BlendOutTime = 0.25f;
 	float PlayRate = 1.0f;
+	float PlayCount = 1.0f;
 	float AnimRootMotionTranslationScale = 1.0f;
 	float StartTimeSeconds = 0.0f;
 	bool bStopWhenAbilityEnds = true;
 };
+
+#undef UE_API

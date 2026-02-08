@@ -197,22 +197,21 @@ public: // the tests
 		const float ManaBaseValue = DestComponent->GetSet<UAbilitySystemTestAttributeSet>()->Mana.GetBaseValue();
 
 		// Define a common lambda for applying a GE with a specific GameplayModOp
-		auto ApplyGameplayModOp = [this, BuffValue](EGameplayModOp::Type GameplayModOp)
+		auto ApplyGameplayModOp = [this, BuffValue](EGameplayModOp::Type GameplayModOp, UGameplayEffect* InEffect)
 		{
-			CONSTRUCT_CLASS(UGameplayEffect, DamageBuffEffect);
-			AddModifier(DamageBuffEffect, GET_FIELD_CHECKED(UAbilitySystemTestAttributeSet, Mana), GameplayModOp, FScalableFloat(BuffValue));
-			DamageBuffEffect->DurationPolicy = EGameplayEffectDurationType::Infinite;
+			AddModifier(InEffect, GET_FIELD_CHECKED(UAbilitySystemTestAttributeSet, Mana), GameplayModOp, FScalableFloat(BuffValue));
+			InEffect->DurationPolicy = EGameplayEffectDurationType::Infinite;
 
-			return SourceComponent->ApplyGameplayEffectToTarget(DamageBuffEffect, DestComponent, 1.f);
+			return SourceComponent->ApplyGameplayEffectToTarget(InEffect, DestComponent, 1.f);
 		};
 
 		// Define a common lambda for testing if an op applied correctly
-		auto TestGameplayModOp = [this, &ApplyGameplayModOp, BuffValue](EGameplayModOp::Type GameplayModOp)
+		auto TestGameplayModOp = [this, &ApplyGameplayModOp, BuffValue](EGameplayModOp::Type GameplayModOp, UGameplayEffect* InEffect)
 		{
 			const float PrevValue = DestComponent->GetSet<UAbilitySystemTestAttributeSet>()->Mana.GetCurrentValue();
 			const float ExpectedValue = FAggregator::StaticExecModOnBaseValue(PrevValue, GameplayModOp, BuffValue);
 
-			FActiveGameplayEffectHandle AGEHandle = ApplyGameplayModOp(GameplayModOp);
+			FActiveGameplayEffectHandle AGEHandle = ApplyGameplayModOp(GameplayModOp, InEffect);
 			const float CurrentValue = DestComponent->GetSet<UAbilitySystemTestAttributeSet>()->Mana.GetCurrentValue();
 			Test->TestEqual(FString::Printf(TEXT("Attribute GameplayModOp %s"), *UEnum::GetValueAsString(GameplayModOp)), CurrentValue, ExpectedValue);
 			
@@ -220,15 +219,21 @@ public: // the tests
 		};
 
 		// Test all of the ops (order matters here due to the implementation of the above StaticExecModOnBaseValue)
-		FActiveGameplayEffectHandle AdditiveHandle = TestGameplayModOp(EGameplayModOp::Additive);
-		FActiveGameplayEffectHandle MultiplicativeHandle = TestGameplayModOp(EGameplayModOp::Multiplicitive);
-		FActiveGameplayEffectHandle DivisionHandle = TestGameplayModOp(EGameplayModOp::Division);
-		FActiveGameplayEffectHandle CompoundHandle = TestGameplayModOp(EGameplayModOp::MultiplyCompound);
-		FActiveGameplayEffectHandle FinalAddHandle = TestGameplayModOp(EGameplayModOp::AddFinal);
+		CONSTRUCT_CLASS(UGameplayEffect, AdditiveEffect);
+		FActiveGameplayEffectHandle AdditiveHandle = TestGameplayModOp(EGameplayModOp::Additive, AdditiveEffect);
+		CONSTRUCT_CLASS(UGameplayEffect, MultiplyEffect);
+		FActiveGameplayEffectHandle MultiplicativeHandle = TestGameplayModOp(EGameplayModOp::Multiplicitive, MultiplyEffect);
+		CONSTRUCT_CLASS(UGameplayEffect, DivisionEffect);
+		FActiveGameplayEffectHandle DivisionHandle = TestGameplayModOp(EGameplayModOp::Division, DivisionEffect);
+		CONSTRUCT_CLASS(UGameplayEffect, CompoundEffect);
+		FActiveGameplayEffectHandle CompoundHandle = TestGameplayModOp(EGameplayModOp::MultiplyCompound, CompoundEffect);
+		CONSTRUCT_CLASS(UGameplayEffect, FinalEffect);
+		FActiveGameplayEffectHandle FinalAddHandle = TestGameplayModOp(EGameplayModOp::AddFinal, FinalEffect);
 
 		// Test the override quickly here before testing the aggregation is as expected
 		{
-			FActiveGameplayEffectHandle OverrideHandle = TestGameplayModOp(EGameplayModOp::Override);
+			CONSTRUCT_CLASS(UGameplayEffect, OverrideEffect);
+			FActiveGameplayEffectHandle OverrideHandle = TestGameplayModOp(EGameplayModOp::Override, OverrideEffect);
 			DestComponent->RemoveActiveGameplayEffect(OverrideHandle);
 		}
 
@@ -236,10 +241,14 @@ public: // the tests
 
 		// Add some compounding GameplayEffects and manually test our equation to see if it's all compounded correctly.
 		{
-			FActiveGameplayEffectHandle BaseAdd2 = ApplyGameplayModOp(EGameplayModOp::Additive);
-			FActiveGameplayEffectHandle BaseMultiply2 = ApplyGameplayModOp(EGameplayModOp::Multiplicitive);
-			FActiveGameplayEffectHandle Compound2 = ApplyGameplayModOp(EGameplayModOp::MultiplyCompound);
-			FActiveGameplayEffectHandle FinalAdd2 = ApplyGameplayModOp(EGameplayModOp::AddFinal);
+			CONSTRUCT_CLASS(UGameplayEffect, Add2Effect);
+			FActiveGameplayEffectHandle BaseAdd2 = ApplyGameplayModOp(EGameplayModOp::Additive, Add2Effect);
+			CONSTRUCT_CLASS(UGameplayEffect, Multiply2Effect);
+			FActiveGameplayEffectHandle BaseMultiply2 = ApplyGameplayModOp(EGameplayModOp::Multiplicitive, Multiply2Effect);
+			CONSTRUCT_CLASS(UGameplayEffect, Compound2Effect);
+			FActiveGameplayEffectHandle Compound2 = ApplyGameplayModOp(EGameplayModOp::MultiplyCompound, Compound2Effect);
+			CONSTRUCT_CLASS(UGameplayEffect, Final2Effect);
+			FActiveGameplayEffectHandle FinalAdd2 = ApplyGameplayModOp(EGameplayModOp::AddFinal, Final2Effect);
 			
 			// ExpectedResult = ((BaseValue + Additive) * Multiplicative / Division * CompoundMultiply) + FinalAdd;
 			// Multiplicative and Division Compound as: 1.0f + ForEachValue(Value - 1.0f). E.g. two applications of 1.5 = 2.
@@ -332,7 +341,7 @@ public: // the tests
 		StackingEffect->DurationPolicy = EGameplayEffectDurationType::HasDuration;
 		StackingEffect->DurationMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(Duration));
 		StackingEffect->StackLimitCount = StackLimit;
-		StackingEffect->StackingType = EGameplayEffectStackingType::AggregateByTarget;
+		StackingEffect->SetStackingType(EGameplayEffectStackingType::AggregateByTarget);
 		StackingEffect->StackDurationRefreshPolicy = EGameplayEffectStackingDurationPolicy::NeverRefresh;
 		StackingEffect->StackExpirationPolicy = EGameplayEffectStackingExpirationPolicy::ClearEntireStack;
 
@@ -363,7 +372,7 @@ public: // the tests
 		StackingEffect->DurationPolicy = EGameplayEffectDurationType::HasDuration;
 		StackingEffect->DurationMagnitude = FGameplayEffectModifierMagnitude(SetByCallerDuration);
 		StackingEffect->StackLimitCount = StackLimit;
-		StackingEffect->StackingType = EGameplayEffectStackingType::AggregateByTarget;
+		StackingEffect->SetStackingType(EGameplayEffectStackingType::AggregateByTarget);
 		StackingEffect->StackDurationRefreshPolicy = EGameplayEffectStackingDurationPolicy::NeverRefresh;
 		StackingEffect->StackExpirationPolicy = EGameplayEffectStackingExpirationPolicy::RemoveSingleStackAndRefreshDuration;
 
@@ -412,7 +421,7 @@ public: // the tests
 		CONSTRUCT_CLASS(UGameplayEffect, TestGameplayCuesGE);
 		TestGameplayCuesGE->GameplayCues.Emplace(GameplayEffectCue);
 		TestGameplayCuesGE->DurationPolicy = EGameplayEffectDurationType::Infinite;
-		TestGameplayCuesGE->StackingType = EGameplayEffectStackingType::AggregateByTarget;
+		TestGameplayCuesGE->SetStackingType(EGameplayEffectStackingType::AggregateByTarget);
 		TestGameplayCuesGE->StackLimitCount = 5; // Make it high enough to not confuse between "expected 1 and got 2" etc.
 
 		UGameplayCueNotify_UnitTest* GCNotify_Test_CDO = GetMutableDefault<UGameplayCueNotify_UnitTest>();
@@ -532,7 +541,7 @@ public: // the tests
 		CONSTRUCT_CLASS(UGameplayEffect, TestGameplayCuesGE);
 		TestGameplayCuesGE->GameplayCues.Emplace(GameplayEffectCue);
 		TestGameplayCuesGE->DurationPolicy = EGameplayEffectDurationType::Infinite;
-		TestGameplayCuesGE->StackingType = EGameplayEffectStackingType::AggregateByTarget;
+		TestGameplayCuesGE->SetStackingType(EGameplayEffectStackingType::AggregateByTarget);
 		TestGameplayCuesGE->StackDurationRefreshPolicy = EGameplayEffectStackingDurationPolicy::NeverRefresh;
 		TestGameplayCuesGE->StackPeriodResetPolicy = EGameplayEffectStackingPeriodPolicy::NeverReset;
 		TestGameplayCuesGE->StackLimitCount = 5; // Make it high enough to not confuse between "expected 1 and got 2" etc.
@@ -591,7 +600,7 @@ public: // the tests
 				// Unexpected behavior:  We can never predict a stacked application (why?!) so it ends up with 1.
 				const bool bPredicting = !DestComponent->IsOwnerActorAuthoritative();
 				bool bExpectedAdded = (!DestComponent->bSuppressGameplayCues);
-				int ExpectedOnActive = bExpectedAdded ? (bPredicting ? 1 : StackLimitCount) : 0; // can only predict the first cue
+				int ExpectedOnActive = bExpectedAdded ? StackLimitCount : 0;
 				int ExpectedOnExecute = 0;
 				int ExpectedWhileActive = ExpectedOnActive;
 				int ExpectedOnRemove = (ExpectedOnActive > 0) ? 1 : 0;		// Even with stacking, the GameplayCue is actually only applied once (and therefore removed once when fully unstacked)

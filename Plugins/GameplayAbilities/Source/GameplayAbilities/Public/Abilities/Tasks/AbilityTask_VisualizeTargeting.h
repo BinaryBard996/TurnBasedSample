@@ -9,43 +9,45 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_VisualizeTargeting.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FVisualizeTargetingDelegate);
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_VisualizeTargeting: public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_VisualizeTargeting: public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
 	UPROPERTY(BlueprintAssignable)
 	FVisualizeTargetingDelegate TimeElapsed;
 
-	void OnTimeElapsed();
+	UE_API void OnTimeElapsed();
 
 	/** Spawns target actor and uses it for visualization. */
 	UFUNCTION(BlueprintCallable, meta=(HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true", HideSpawnParms="Instigator"), Category="Ability|Tasks")
-	static UAbilityTask_VisualizeTargeting* VisualizeTargeting(UGameplayAbility* OwningAbility, TSubclassOf<AGameplayAbilityTargetActor> Class, FName TaskInstanceName, float Duration = -1.0f);
+	static UE_API UAbilityTask_VisualizeTargeting* VisualizeTargeting(UGameplayAbility* OwningAbility, TSubclassOf<AGameplayAbilityTargetActor> Class, FName TaskInstanceName, float Duration = -1.0f);
 
 	/** Visualize target using a specified target actor. */
 	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Ability|Tasks")
-	static UAbilityTask_VisualizeTargeting* VisualizeTargetingUsingActor(UGameplayAbility* OwningAbility, AGameplayAbilityTargetActor* TargetActor, FName TaskInstanceName, float Duration = -1.0f);
+	static UE_API UAbilityTask_VisualizeTargeting* VisualizeTargetingUsingActor(UGameplayAbility* OwningAbility, AGameplayAbilityTargetActor* TargetActor, FName TaskInstanceName, float Duration = -1.0f);
 
-	virtual void Activate() override;
-
-	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
-	bool BeginSpawningActor(UGameplayAbility* OwningAbility, TSubclassOf<AGameplayAbilityTargetActor> Class, AGameplayAbilityTargetActor*& SpawnedActor);
+	UE_API virtual void Activate() override;
 
 	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
-	void FinishSpawningActor(UGameplayAbility* OwningAbility, AGameplayAbilityTargetActor* SpawnedActor);
+	UE_API bool BeginSpawningActor(UGameplayAbility* OwningAbility, TSubclassOf<AGameplayAbilityTargetActor> Class, AGameplayAbilityTargetActor*& SpawnedActor);
+
+	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
+	UE_API void FinishSpawningActor(UGameplayAbility* OwningAbility, AGameplayAbilityTargetActor* SpawnedActor);
 
 protected:
 
-	void SetDuration(const float Duration);
+	UE_API void SetDuration(const float Duration);
 
-	bool ShouldSpawnTargetActor() const;
-	void InitializeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
-	void FinalizeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
+	UE_API bool ShouldSpawnTargetActor() const;
+	UE_API void InitializeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
+	UE_API void FinalizeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
 protected:
 
@@ -67,3 +69,5 @@ protected:
 *		-Have a function named FinishSpawningActor w/ an AActor* of the class you spawned
 *			-This function *must* call ExecuteConstruction + PostActorConstruction
 */
+
+#undef UE_API

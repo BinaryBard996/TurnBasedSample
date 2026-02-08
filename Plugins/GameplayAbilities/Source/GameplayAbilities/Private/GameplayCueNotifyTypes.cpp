@@ -53,7 +53,7 @@ static APlayerController* FindPlayerControllerFromActor(AActor* Actor)
 		Pawn = Actor->GetInstigator<APawn>();
 	}
 
-	PC = (Pawn ? Cast<APlayerController>(Pawn->Controller) : nullptr);
+	PC = (Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr);
 	if (PC)
 	{
 		return PC;
@@ -376,6 +376,26 @@ APlayerController* FGameplayCueNotify_SpawnContext::FindLocalPlayerController(EG
 	APlayerController* PC = FindPlayerControllerFromActor(ActorToSearch);
 
 	return (PC && PC->IsLocalController()) ? PC : nullptr;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+// FGameplayCueNotify_SpawnResult
+//////////////////////////////////////////////////////////////////////////
+FGameplayCueNotify_SpawnResult::FGameplayCueNotify_SpawnResult()
+{
+	Reset();
+}
+
+void FGameplayCueNotify_SpawnResult::Reset()
+{
+	FxSystemComponents.Reset();
+	AudioComponents.Reset();
+	CameraShakes.Reset();
+	CameraLensEffects.Reset();
+	ForceFeedbackComponent = nullptr;
+	ForceFeedbackTargetPC = nullptr;
+	DecalComponent = nullptr;
 }
 
 

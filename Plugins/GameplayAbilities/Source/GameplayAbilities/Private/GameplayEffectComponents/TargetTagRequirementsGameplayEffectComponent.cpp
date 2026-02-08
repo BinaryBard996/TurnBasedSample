@@ -7,6 +7,8 @@
 #include "Misc/DataValidation.h"
 #include "AbilitySystemPrivate.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(TargetTagRequirementsGameplayEffectComponent)
+
 #define LOCTEXT_NAMESPACE "TargetTagRequirementsGameplayEffectComponent"
 
 UTargetTagRequirementsGameplayEffectComponent::UTargetTagRequirementsGameplayEffectComponent()

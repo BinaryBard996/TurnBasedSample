@@ -6,12 +6,14 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitVelocityChange.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UMovementComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FWaitVelocityChangeDelegate);
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitVelocityChange: public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitVelocityChange: public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -19,13 +21,13 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitVelocityChange: public UAbilityTask
 	UPROPERTY(BlueprintAssignable)
 	FWaitVelocityChangeDelegate OnVelocityChage;
 
-	virtual void TickTask(float DeltaTime) override;
+	UE_API virtual void TickTask(float DeltaTime) override;
 
 	/** Wait for the actor's movement component velocity to be of minimum magnitude when projected along given direction */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (DisplayName="WaitVelocityChange",HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitVelocityChange* CreateWaitVelocityChange(UGameplayAbility* OwningAbility, FVector Direction, float MinimumMagnitude);
+	static UE_API UAbilityTask_WaitVelocityChange* CreateWaitVelocityChange(UGameplayAbility* OwningAbility, FVector Direction, float MinimumMagnitude);
 		
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 protected:
 
@@ -35,3 +37,5 @@ protected:
 	float	MinimumMagnitude;
 	FVector Direction;
 };
+
+#undef UE_API

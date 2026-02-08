@@ -11,12 +11,11 @@
 #include "GameplayEffectTypes.h"
 #include "GameplayPrediction.h"
 #include "GameplayAbilitySpec.h"
-#if UE_ENABLE_INCLUDE_ORDER_DEPRECATED_IN_5_2
-#include "Abilities/GameplayAbilityRepAnimMontage.h"
-#endif
 #include "Abilities/GameplayAbilityTargetTypes.h"
 
 #include "GameplayAbilityTypes.generated.h"
+
+#define UE_API GAMEPLAYABILITIES_API
 
 class APlayerController;
 class UAbilitySystemComponent;
@@ -42,14 +41,16 @@ namespace EGameplayAbilityInstancingPolicy
 	 */
 	enum Type : int
 	{
-		// This ability is never instanced. Anything that executes the ability is operating on the CDO.
+		/** This ability is never instanced. Anything that executes the ability is operating on the CDO. */
 		NonInstanced UE_DEPRECATED_FORGAME(5.5, "Use InstancedPerActor as the default to avoid confusing corner cases"),
 
-		// Each actor gets their own instance of this ability. State can be saved, replication is possible.
-		InstancedPerActor,
+		/** Each actor gets it's own single instance of this ability, which supports replication to its owning actor to allow RPC's
+		 * within the ability. As it is a single instance, only one ability maybe active at any time. State is saved between activations. */
+		InstancedPerActor 		UMETA(DisplayName = "Instanced Per Actor"),
 
-		// We instance this ability each time it is executed. Replication currently unsupported.
-		InstancedPerExecution,
+		/** We instance this ability each time it is executed. Replication currently unsupported. These can have multiple running
+		 * at the same time, and no state is saved between execution. */
+		InstancedPerExecution		UMETA(DisplayName = "Instanced Per Execution"),
 	};
 }
 
@@ -59,16 +60,16 @@ namespace EGameplayAbilityNetExecutionPolicy
 	/** Where does an ability execute on the network. Does a client "ask and predict", "ask and wait", "don't ask (just do it)" */
 	enum Type : int
 	{
-		// Part of this ability runs predictively on the local client if there is one
+		/** Part of this ability runs predictively on the local client if there is one */
 		LocalPredicted		UMETA(DisplayName = "Local Predicted"),
 
-		// This ability will only run on the client or server that has local control
+		/** This ability will only run on the client or server that has local control */
 		LocalOnly			UMETA(DisplayName = "Local Only"),
 
-		// This ability is initiated by the server, but will also run on the local client if one exists
+		/** This ability is initiated by the server, but will also run on the local client if one exists */
 		ServerInitiated		UMETA(DisplayName = "Server Initiated"),
 
-		// This ability will only run on the server
+		/** This ability will only run on the server */
 		ServerOnly			UMETA(DisplayName = "Server Only"),
 	};
 }
@@ -79,16 +80,16 @@ namespace EGameplayAbilityNetSecurityPolicy
 	/** What protections does this ability have? Should the client be allowed to request changes to the execution of the ability? */
 	enum Type : int
 	{
-		// No security requirements. Client or server can trigger execution and termination of this ability freely.
+		/** No security requirements. Client or server can trigger execution and termination of this ability freely. */
 		ClientOrServer			UMETA(DisplayName = "Client Or Server"),
 
-		// A client requesting execution of this ability will be ignored by the server. Clients can still request that the server cancel or end this ability.
+		/** A client requesting execution of this ability will be ignored by the server. Clients can still request that the server cancel or end this ability. */
 		ServerOnlyExecution		UMETA(DisplayName = "Server Only Execution"),
 
-		// A client requesting cancellation or ending of this ability will be ignored by the server. Clients can still request execution of the ability.
+		/** A client requesting cancellation or ending of this ability will be ignored by the server. Clients can still request execution of the ability. */
 		ServerOnlyTermination	UMETA(DisplayName = "Server Only Termination"),
 
-		// Server controls both execution and termination of this ability. A client making any requests will be ignored.
+		/** Server controls both execution and termination of this ability. A client making any requests will be ignored. */
 		ServerOnly				UMETA(DisplayName = "Server Only"),
 	};
 }
@@ -99,10 +100,10 @@ namespace EGameplayAbilityReplicationPolicy
 	/** How an ability replicates state/events to everyone on the network */
 	enum Type : int
 	{
-		// We don't replicate the instance of the ability to anyone.
+		/** We don't replicate the instance of the ability to anyone. */
 		ReplicateNo			UMETA(DisplayName = "Do Not Replicate"),
 
-		// We replicate the instance of the ability to the owner.
+		/** We replicate the instance of the ability to the owner. */
 		ReplicateYes		UMETA(DisplayName = "Replicate"),
 	};
 }
@@ -113,14 +114,14 @@ namespace EGameplayAbilityTriggerSource
 	/**	Defines what type of trigger will activate the ability, paired to a tag */
 	enum Type : int
 	{
-		// Triggered from a gameplay event, will come with payload
-		GameplayEvent,
-
-		// Triggered if the ability's owner gets a tag added, triggered once whenever it's added
-		OwnedTagAdded,
-
-		// Triggered if the ability's owner gets tag added, removed when the tag is removed
-		OwnedTagPresent,
+		/** Triggered by an external gameplay event. The ability will receive a GameplayEvent payload. */
+		GameplayEvent      UMETA(DisplayName = "On Gameplay Event"),
+		
+		/** Triggered when the owner gains the specified tag. Will not cancel when the tag is removed. */
+		OwnedTagAdded      UMETA(DisplayName = "When Tag Is Added"),
+		
+		/** Triggered when the owner has the specified tag. The ability will be canceled if the tag is later removed. */
+		OwnedTagPresent    UMETA(DisplayName = "When Tag Is Present"),
 	};
 }
 
@@ -136,7 +137,7 @@ namespace EGameplayAbilityTriggerSource
  *
  */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAbilityActorInfo
+struct FGameplayAbilityActorInfo
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -175,32 +176,32 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityActorInfo
 	FName AffectedAnimInstanceTag; 
 	
 	/** Accessor to get the affected anim instance from the SkeletalMeshComponent */
-	UAnimInstance* GetAnimInstance() const;
+	UE_API UAnimInstance* GetAnimInstance() const;
 	
 	/** Returns true if this actor is locally controlled. Only true for players on the client that owns them (differs from APawn::IsLocallyControlled which requires a Controller) */
-	bool IsLocallyControlled() const;
+	UE_API bool IsLocallyControlled() const;
 
 	/** Returns true if this actor has a PlayerController that is locally controlled. */
-	bool IsLocallyControlledPlayer() const;
+	UE_API bool IsLocallyControlledPlayer() const;
 
 	/** Returns true if the owning actor has net authority */
-	bool IsNetAuthority() const;
+	UE_API bool IsNetAuthority() const;
 
 	/** Initializes the info from an owning actor. Will set both owner and avatar */
-	virtual void InitFromActor(AActor *OwnerActor, AActor *AvatarActor, UAbilitySystemComponent* InAbilitySystemComponent);
+	UE_API virtual void InitFromActor(AActor *OwnerActor, AActor *AvatarActor, UAbilitySystemComponent* InAbilitySystemComponent);
 
 	/** Sets a new avatar actor, keeps same owner and ability system component */
-	virtual void SetAvatarActor(AActor *AvatarActor);
+	UE_API virtual void SetAvatarActor(AActor *AvatarActor);
 
 	/** Clears out any actor info, both owner and avatar */
-	virtual void ClearActorInfo();
+	UE_API virtual void ClearActorInfo();
 };
 
 
 
 /** Data about montages that were played locally (all montages in case of server. predictive montages in case of client). Never replicated directly. */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayAbilityLocalAnimMontage
+struct FGameplayAbilityLocalAnimMontage
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -229,7 +230,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilityLocalAnimMontage
 
 /** Metadata for a tag-based Gameplay Event, that can activate other abilities or run ability-specific logic */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayEventData
+struct FGameplayEventData
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -406,7 +407,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 /** Used to initialize default values for attributes */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FAttributeDefaults
+struct FAttributeDefaults
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -424,7 +425,7 @@ struct GAMEPLAYABILITIES_API FAttributeDefaults
 
 /** Debug message emitted by ability tasks */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FAbilityTaskDebugMessage
+struct FAbilityTaskDebugMessage
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -485,10 +486,10 @@ struct FServerAbilityRPCBatch
 
 
 /** Helper struct for defining ServerRPC batch windows. If null ASC is passed in, this becomes a noop. */
-struct GAMEPLAYABILITIES_API FScopedServerAbilityRPCBatcher
+struct FScopedServerAbilityRPCBatcher
 {
-	FScopedServerAbilityRPCBatcher(UAbilitySystemComponent* InASC, FGameplayAbilitySpecHandle InAbilityHandle);
-	~FScopedServerAbilityRPCBatcher();
+	UE_API FScopedServerAbilityRPCBatcher(UAbilitySystemComponent* InASC, FGameplayAbilitySpecHandle InAbilityHandle);
+	UE_API ~FScopedServerAbilityRPCBatcher();
 
 private:
 
@@ -500,7 +501,7 @@ private:
 
 /** Used as a key for storing internal ability data */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayAbilitySpecHandleAndPredictionKey
+struct FGameplayAbilitySpecHandleAndPredictionKey
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -535,7 +536,7 @@ struct GAMEPLAYABILITIES_API FGameplayAbilitySpecHandleAndPredictionKey
 };
 
 /** Struct defining the cached data for a specific gameplay ability. This data is generally synchronized client->server in a network game. */
-struct GAMEPLAYABILITIES_API FAbilityReplicatedDataCache
+struct FAbilityReplicatedDataCache
 {
 	/** What elements this activation is targeting */
 	FGameplayAbilityTargetDataHandle TargetData;
@@ -594,7 +595,7 @@ struct GAMEPLAYABILITIES_API FAbilityReplicatedDataCache
 
 /** 
  *	Associative container of GameplayAbilitySpecs + PredictionKeys --> FAbilityReplicatedDataCache. Basically, it holds replicated data on the ability system component that abilities access in their scripting.
- *	This was refactored from a normal TMap. This mainly servers to:
+ *	This was refactored from a normal TMap. This mainly serves to:
  *		1. Return shared ptrs to the cached data so that callsites are not vulnerable to the underlying map shifting around (E.g invoking a replicated event ends the ability or activates a new one and causes memory to move, invalidating the pointer).
  *		2. Data is cleared on ability end via ::Remove.
  *		3. The FAbilityReplicatedDataCache instances are recycled rather than allocated each time via ::FreeData.
@@ -615,3 +616,5 @@ private:
 	TArray<FKeyDataPair> InUseData;
 	TArray<TSharedRef<FAbilityReplicatedDataCache>> FreeData;
 };
+
+#undef UE_API

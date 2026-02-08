@@ -206,9 +206,9 @@ void FMovieSceneGameplayCueChannel::DeleteKeysFrom(FFrameNumber InTime, bool bDe
 	GetData().DeleteKeysFrom(InTime, bDeleteKeysBefore);
 }
 
-void FMovieSceneGameplayCueChannel::ChangeFrameResolution(FFrameRate SourceRate, FFrameRate DestinationRate)
+void FMovieSceneGameplayCueChannel::RemapTimes(const UE::MovieScene::IRetimingInterface& Retimer)
 {
-	GetData().ChangeFrameResolution(SourceRate, DestinationRate);
+	GetData().RemapTimes(Retimer);
 }
 
 TRange<FFrameNumber> FMovieSceneGameplayCueChannel::ComputeEffectiveRange() const

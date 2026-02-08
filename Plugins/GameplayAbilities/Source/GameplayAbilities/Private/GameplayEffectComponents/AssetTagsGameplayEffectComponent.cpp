@@ -2,6 +2,8 @@
 
 #include "GameplayEffectComponents/AssetTagsGameplayEffectComponent.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AssetTagsGameplayEffectComponent)
+
 #define LOCTEXT_NAMESPACE "AssetTagsGameplayEffectComponent"
 
 void UAssetTagsGameplayEffectComponent::PostInitProperties()

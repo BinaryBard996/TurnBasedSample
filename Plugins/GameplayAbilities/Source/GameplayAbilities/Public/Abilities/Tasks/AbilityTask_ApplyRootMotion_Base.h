@@ -5,6 +5,8 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_ApplyRootMotion_Base.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UCharacterMovementComponent;
 enum class ERootMotionFinishVelocityMode : uint8;
 
@@ -12,20 +14,20 @@ enum class ERootMotionFinishVelocityMode : uint8;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnTargetActorSwapped, AActor*, AActor*);
 
 /** Base class for ability tasks that apply root motion */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_ApplyRootMotion_Base : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_ApplyRootMotion_Base : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
-	virtual void InitSimulatedTask(UGameplayTasksComponent& InGameplayTasksComponent) override;
+	UE_API virtual void InitSimulatedTask(UGameplayTasksComponent& InGameplayTasksComponent) override;
 
 	//..See notes on delegate definition FOnTargetActorSwapped.
-	static FOnTargetActorSwapped OnTargetActorSwapped;
+	static UE_API FOnTargetActorSwapped OnTargetActorSwapped;
 
 protected:
 
 	virtual void SharedInitAndApply() {};
-	virtual bool HasTimedOut() const;
+	UE_API virtual bool HasTimedOut() const;
 
 	UPROPERTY(Replicated)
 	FName ForceName;
@@ -43,7 +45,7 @@ protected:
 	float FinishClampVelocity;
 
 	UPROPERTY()
-	TObjectPtr<UCharacterMovementComponent> MovementComponent; 
+	TWeakObjectPtr<UCharacterMovementComponent> MovementComponent; 
 	
 	uint16 RootMotionSourceID;
 
@@ -52,3 +54,5 @@ protected:
 	float StartTime;
 	float EndTime;
 };
+
+#undef UE_API

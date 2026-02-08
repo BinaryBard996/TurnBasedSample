@@ -12,6 +12,8 @@
 #include "IPropertyTypeCustomization.h"
 #include "PropertyEditorModule.h"
 
+#define UE_API GAMEPLAYABILITIESEDITOR_API
+
 class IDetailLayoutBuilder;
 class IPropertyHandle;
 class IPropertyUtilities;
@@ -66,10 +68,10 @@ private:
 	void OnAttributeChanged(FProperty* SelectedAttribute);
 };
 
-class GAMEPLAYABILITIESEDITOR_API FScalableFloatDetails : public IPropertyTypeCustomization
+class FScalableFloatDetails : public IPropertyTypeCustomization
 {
 public:
-	static TSharedRef<IPropertyTypeCustomization> MakeInstance();
+	static UE_API TSharedRef<IPropertyTypeCustomization> MakeInstance();
 	static constexpr float DefaultMinPreviewLevel = 0.f;
 	static constexpr float DefaultMaxPreviewLevel = 30.f;
 
@@ -82,57 +84,57 @@ public:
 
 protected:
 
-	virtual void CustomizeHeader( TSharedRef<class IPropertyHandle> StructPropertyHandle, class FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& StructCustomizationUtils ) override;
-	virtual void CustomizeChildren( TSharedRef<class IPropertyHandle> StructPropertyHandle, class IDetailChildrenBuilder& StructBuilder, IPropertyTypeCustomizationUtils& StructCustomizationUtils ) override;              
+	UE_API virtual void CustomizeHeader( TSharedRef<class IPropertyHandle> StructPropertyHandle, class FDetailWidgetRow& HeaderRow, IPropertyTypeCustomizationUtils& StructCustomizationUtils ) override;
+	UE_API virtual void CustomizeChildren( TSharedRef<class IPropertyHandle> StructPropertyHandle, class IDetailChildrenBuilder& StructBuilder, IPropertyTypeCustomizationUtils& StructCustomizationUtils ) override;              
 
-	bool IsEditable() const;
-	void UpdatePreviewLevels();
+	UE_API bool IsEditable() const;
+	UE_API void UpdatePreviewLevels();
 
 	// Curve Table selector
-	TSharedRef<SWidget> CreateCurveTableWidget();
-	TSharedRef<SWidget> GetCurveTablePicker();
-	void OnSelectCurveTable(const FAssetData& AssetData);
-	void OnCloseMenu();
-	FText GetCurveTableText() const;
-	FText GetCurveTableTooltip() const;
-	EVisibility GetCurveTableVisiblity() const;
-	EVisibility GetAssetButtonVisiblity() const;
-	void OnBrowseTo();
-	void OnClear();
-	void OnUseSelected();
+	UE_API TSharedRef<SWidget> CreateCurveTableWidget();
+	UE_API TSharedRef<SWidget> GetCurveTablePicker();
+	UE_API void OnSelectCurveTable(const FAssetData& AssetData);
+	UE_API void OnCloseMenu();
+	UE_API FText GetCurveTableText() const;
+	UE_API FText GetCurveTableTooltip() const;
+	UE_API EVisibility GetCurveTableVisiblity() const;
+	UE_API EVisibility GetAssetButtonVisiblity() const;
+	UE_API void OnBrowseTo();
+	UE_API void OnClear();
+	UE_API void OnUseSelected();
 	
 	// Registry Type selector
-	TSharedRef<SWidget> CreateRegistryTypeWidget();
-	FString GetRegistryTypeValueString() const;
-	FText GetRegistryTypeTooltip() const;
-	EVisibility GetRegistryTypeVisiblity() const;
+	UE_API TSharedRef<SWidget> CreateRegistryTypeWidget();
+	UE_API FString GetRegistryTypeValueString() const;
+	UE_API FText GetRegistryTypeTooltip() const;
+	UE_API EVisibility GetRegistryTypeVisiblity() const;
 
 	// Curve source accessors
-	void OnCurveSourceChanged();
-	void RefreshSourceData();
-	class UCurveTable* GetCurveTable(FPropertyAccess::Result* OutResult = nullptr) const;
-	FDataRegistryType GetRegistryType(FPropertyAccess::Result* OutResult = nullptr) const;
+	UE_API void OnCurveSourceChanged();
+	UE_API void RefreshSourceData();
+	UE_API class UCurveTable* GetCurveTable(FPropertyAccess::Result* OutResult = nullptr) const;
+	UE_API FDataRegistryType GetRegistryType(FPropertyAccess::Result* OutResult = nullptr) const;
 
 	// Row/item name widget
-	TSharedRef<SWidget> CreateRowNameWidget();
-	EVisibility GetRowNameVisibility() const;
-	FText GetRowNameComboBoxContentText() const;
-	FText GetRowNameComboBoxContentTooltip() const;
-	void OnRowNameChanged();
+	UE_API TSharedRef<SWidget> CreateRowNameWidget();
+	UE_API EVisibility GetRowNameVisibility() const;
+	UE_API FText GetRowNameComboBoxContentText() const;
+	UE_API FText GetRowNameComboBoxContentTooltip() const;
+	UE_API void OnRowNameChanged();
 
 	// Preview widgets
-	EVisibility GetPreviewVisibility() const;
-	float GetPreviewLevel() const;
-	void SetPreviewLevel(float NewLevel);
-	FText GetRowValuePreviewLabel() const;
-	FText GetRowValuePreviewText() const;
+	UE_API EVisibility GetPreviewVisibility() const;
+	UE_API float GetPreviewLevel() const;
+	UE_API void SetPreviewLevel(float NewLevel);
+	UE_API FText GetRowValuePreviewLabel() const;
+	UE_API FText GetRowValuePreviewText() const;
 
 	// Row accessors and callbacks
-	FName GetRowName(FPropertyAccess::Result* OutResult = nullptr) const;
-	const FRealCurve* GetRealCurve(FPropertyAccess::Result* OutResult = nullptr) const;
-	FDataRegistryId GetRegistryId(FPropertyAccess::Result* OutResult = nullptr) const;
-	void SetRegistryId(FDataRegistryId NewId);
-	void GetCustomRowNames(TArray<FName>& OutRows) const;
+	UE_API FName GetRowName(FPropertyAccess::Result* OutResult = nullptr) const;
+	UE_API const FRealCurve* GetRealCurve(FPropertyAccess::Result* OutResult = nullptr) const;
+	UE_API FDataRegistryId GetRegistryId(FPropertyAccess::Result* OutResult = nullptr) const;
+	UE_API void SetRegistryId(FDataRegistryId NewId);
+	UE_API void GetCustomRowNames(TArray<FName>& OutRows) const;
 
 	TSharedPtr<IPropertyHandle> ValueProperty;
 	TSharedPtr<IPropertyHandle> CurveTableHandleProperty;
@@ -147,3 +149,5 @@ protected:
 	float MaxPreviewLevel;
 	bool bSourceRefreshQueued;
 };
+
+#undef UE_API

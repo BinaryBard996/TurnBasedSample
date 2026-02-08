@@ -19,6 +19,13 @@
 
 #define LOCTEXT_NAMESPACE "GameplayCueNotify_Actor"
 
+static TAutoConsoleVariable<bool> CVarGameplayCueNotifyMultipleRemoveEvents(
+	TEXT("AbilitySystem.GameplayCueNotifyMultipleRemoveEvents"),
+	true,
+	TEXT("Controls how many times a GameplayCueNotify_Actor can execute its OnRemove/OnCeaseRelevant event per instance.")
+	TEXT(" true: each WhileActive/OnBecameRelevant event will permit a following OnRemove/OnCeaseRelevant event.\n")
+	TEXT(" false: only one OnRemove/OnCeaseRelevant event will execute per instance."));
+
 namespace FAbilitySystemTweaks
 {
 	int ClearCueNotifyTimers = 1;
@@ -269,6 +276,10 @@ void AGameplayCueNotify_Actor::HandleGameplayCue(AActor* MyTarget, EGameplayCueE
 		case EGameplayCueEvent::WhileActive:
 			WhileActive(MyTarget, Parameters);
 			bHasHandledWhileActiveEvent = true;
+			if (CVarGameplayCueNotifyMultipleRemoveEvents.GetValueOnGameThread())
+			{
+				bHasHandledOnRemoveEvent = false;
+			}
 			break;
 
 		case EGameplayCueEvent::Executed:
@@ -372,7 +383,7 @@ void AGameplayCueNotify_Actor::GameplayCueFinishedCallback()
 
 bool AGameplayCueNotify_Actor::GameplayCuePendingRemove()
 {
-	return GetLifeSpan() > 0.f || FinishTimerHandle.IsValid() || !IsValid(this);
+	return GetLifeSpan() > 0.f || FinishTimerHandle.IsValid() || !IsValidChecked(this);
 }
 
 bool AGameplayCueNotify_Actor::Recycle()

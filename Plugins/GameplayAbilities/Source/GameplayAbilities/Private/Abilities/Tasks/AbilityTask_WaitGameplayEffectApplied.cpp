@@ -10,7 +10,6 @@
 UAbilityTask_WaitGameplayEffectApplied::UAbilityTask_WaitGameplayEffectApplied(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	Locked = false;
 }
 
 void UAbilityTask_WaitGameplayEffectApplied::Activate()
@@ -31,48 +30,97 @@ void UAbilityTask_WaitGameplayEffectApplied::OnApplyGameplayEffectCallback(UAbil
 	{
 		return;
 	}
+
+	// Check tag queries if the ability task was created using with tag requirement params.
 	if (!SourceTagRequirements.RequirementsMet(*SpecApplied.CapturedSourceTags.GetAggregatedTags()))
 	{
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, SourceTagRequirements not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *SourceTagRequirements.ToString());
 		return;
 	}
+
 	if (!TargetTagRequirements.RequirementsMet(*SpecApplied.CapturedTargetTags.GetAggregatedTags()))
 	{
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, TargetTagRequirements not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *TargetTagRequirements.ToString());
 		return;
 	}
 
-	if (SourceTagQuery.IsEmpty() == false)
+	FGameplayTagContainer AllAssetTags;
+	SpecApplied.GetAllAssetTags(AllAssetTags);
+	if (!AssetTagRequirements.RequirementsMet(AllAssetTags))
 	{
-		if (!SourceTagQuery.Matches(*SpecApplied.CapturedSourceTags.GetAggregatedTags()))
-		{
-			return;
-		}
-	}
-
-	if (TargetTagQuery.IsEmpty() == false)
-	{
-		if (!TargetTagQuery.Matches(*SpecApplied.CapturedTargetTags.GetAggregatedTags()))
-		{
-			return;
-		}
-	}
-
-	if (Locked)
-	{
-		ABILITY_LOG(Error, TEXT("WaitGameplayEffectApplied recursion detected. Ability: %s. Applied Spec: %s. This could cause an infinite loop! Ignoring"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString());
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, AssetTagRequirements not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *AssetTagRequirements.ToString());
 		return;
+	}
+
+	FGameplayTagContainer AllGrantedTags;
+	SpecApplied.GetAllGrantedTags(AllGrantedTags);
+	if (!GrantedTagRequirements.RequirementsMet(AllGrantedTags))
+	{
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, GrantedTagRequirements not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *GrantedTagRequirements.ToString());
+		return;
+	}
+
+	// Check tag queries if the ability task was created using with tag query params.
+	if (!SourceTagQuery.IsEmpty() && !SourceTagQuery.Matches(*SpecApplied.CapturedSourceTags.GetAggregatedTags()))
+	{
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, SourceTagQuery not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *SourceTagQuery.GetDescription());
+		return;
+	}
+
+	if (!TargetTagQuery.IsEmpty() && !TargetTagQuery.Matches(*SpecApplied.CapturedTargetTags.GetAggregatedTags()))
+	{
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, TargetTagQuery not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *TargetTagQuery.GetDescription());
+		return;
+	}
+
+	if (!AssetTagQuery.IsEmpty() && !AssetTagQuery.Matches(AllAssetTags))
+	{
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, AssetTagQuery not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *AssetTagQuery.GetDescription());
+		return;
+	}
+
+	if (!GrantedTagQuery.IsEmpty() && !GrantedTagQuery.Matches(AllGrantedTags))
+	{
+		ABILITY_LOG(Verbose, TEXT("WaitGameplayEffectApplied in Ability '%s': Not triggering for Applied Spec: %s, GrantedTagQuery not passed: %s"), *GetNameSafe(Ability), *SpecApplied.ToSimpleString(), *GrantedTagQuery.GetDescription());
+		return;
+	}
+
+	// We allow GameplayEffect application to trigger other GameplayEffect application (as of UE 5.7). However, in order to prevent infinite recursions, 
+	// we don't allow any effect class to be applied recursively. Keep track of effect classes as this function is entered recursively and abort if the
+	// current applied effect class is already being applied higher in the callstack.
+	const TSubclassOf<UGameplayEffect> EffectClass = SpecApplied.Def ? SpecApplied.Def->GetClass() : nullptr;
+	if (BroadcastingEffectStack.Contains(EffectClass))
+	{
+		ABILITY_LOG(Error, TEXT("WaitGameplayEffectApplied in Ability '%s': recursive application of '%s' detected. This could cause an infinite loop, ignoring broadcast. Current stack: %s"), *GetNameSafe(Ability), *GetNameSafe(EffectClass), *GetBroadcastingEffectStackString());
+		return;
+	}
+	else if (UE_LOG_ACTIVE(LogAbilitySystem, VeryVerbose) && !BroadcastingEffectStack.IsEmpty())
+	{
+		ABILITY_LOG(VeryVerbose, TEXT("WaitGameplayEffectApplied in Ability '%s': application of '%s' causes no recursion. Current stack: %s"), *GetNameSafe(Ability), *GetNameSafe(EffectClass), *GetBroadcastingEffectStackString());
 	}
 	
 	FGameplayEffectSpecHandle	SpecHandle(new FGameplayEffectSpec(SpecApplied));
-
 	{
-		TGuardValue<bool> GuardValue(Locked, true);	
+		BroadcastingEffectStack.Add(EffectClass);
 		BroadcastDelegate(AvatarActor, SpecHandle, ActiveHandle);
+		BroadcastingEffectStack.RemoveSingle(EffectClass);
 	}
 
 	if (TriggerOnce)
 	{
 		EndTask();
 	}
+}
+
+FString UAbilityTask_WaitGameplayEffectApplied::GetBroadcastingEffectStackString() const
+{
+	TArray<FString> AllEffectNames;
+	for (const TSubclassOf<UGameplayEffect>& ExistingEffectClass : BroadcastingEffectStack)
+	{
+		AllEffectNames.Add(GetNameSafe(ExistingEffectClass));
+
+	}
+	return FString::Join(AllEffectNames, TEXT(","));
 }
 
 void UAbilityTask_WaitGameplayEffectApplied::OnDestroy(bool AbilityEnded)

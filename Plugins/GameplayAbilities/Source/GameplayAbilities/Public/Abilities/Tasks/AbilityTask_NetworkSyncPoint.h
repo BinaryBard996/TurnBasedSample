@@ -6,6 +6,8 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_NetworkSyncPoint.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNetworkSyncDelegate);
 
 UENUM()
@@ -22,8 +24,8 @@ enum class EAbilityTaskNetSyncType : uint8
 };
 
 /** Task for providing a generic sync point for client server (one can wait for a signal from the other) */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_NetworkSyncPoint : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_NetworkSyncPoint : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -31,9 +33,9 @@ class GAMEPLAYABILITIES_API UAbilityTask_NetworkSyncPoint : public UAbilityTask
 	FNetworkSyncDelegate	OnSync;
 
 	UFUNCTION()
-	void OnSignalCallback();
+	UE_API void OnSignalCallback();
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	/**
 	 *	
@@ -50,14 +52,16 @@ class GAMEPLAYABILITIES_API UAbilityTask_NetworkSyncPoint : public UAbilityTask
 	 *	
 	 */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_NetworkSyncPoint* WaitNetSync(UGameplayAbility* OwningAbility, EAbilityTaskNetSyncType SyncType);
+	static UE_API UAbilityTask_NetworkSyncPoint* WaitNetSync(UGameplayAbility* OwningAbility, EAbilityTaskNetSyncType SyncType);
 
 protected:
 
-	void SyncFinished();
+	UE_API void SyncFinished();
 
 	/** The event we replicate */
 	EAbilityGenericReplicatedEvent::Type	ReplicatedEventToListenFor;
 
 	EAbilityTaskNetSyncType SyncType;
 };
+
+#undef UE_API

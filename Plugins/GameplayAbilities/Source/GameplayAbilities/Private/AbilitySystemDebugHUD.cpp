@@ -299,10 +299,9 @@ void AAbilitySystemDebugHUD::NotifyExtensionEnableChanged(UWorld* InWorld)
 	}
 
 	AAbilitySystemDebugHUD* HUD = nullptr;
-	for (TActorIterator<AAbilitySystemDebugHUD> It(InWorld); It; ++It)
+	if (TActorIterator<AAbilitySystemDebugHUD> It(InWorld); It)
 	{
 		HUD = *It;
-		break;
 	}
 
 	bool bAnyExtensionEnabled = bEnableBasicHUD;

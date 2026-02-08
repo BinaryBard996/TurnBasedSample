@@ -45,7 +45,7 @@ void UAbilityTask_ApplyRootMotion_Base::InitSimulatedTask(UGameplayTasksComponen
 
 bool UAbilityTask_ApplyRootMotion_Base::HasTimedOut() const
 {
-	const TSharedPtr<FRootMotionSource> RMS = (MovementComponent ? MovementComponent->GetRootMotionSourceByID(RootMotionSourceID) : nullptr);
+	const TSharedPtr<FRootMotionSource> RMS = (MovementComponent.IsValid() ? MovementComponent->GetRootMotionSourceByID(RootMotionSourceID) : nullptr);
 	if (!RMS.IsValid())
 	{
 		return true;

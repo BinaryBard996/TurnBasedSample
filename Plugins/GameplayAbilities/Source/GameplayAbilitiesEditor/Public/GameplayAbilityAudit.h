@@ -6,6 +6,8 @@
 #include "Abilities/GameplayAbility.h"
 #include "GameplayAbilityAudit.generated.h"
 
+#define UE_API GAMEPLAYABILITIESEDITOR_API
+
 class UBlueprint;
 class UEdGraph;
 
@@ -41,15 +43,15 @@ ENUM_CLASS_FLAGS(EGameplayAbilityEndInBlueprints)
 
 /** This contains all of the data we gather about a Blueprint during the Audit process */
 USTRUCT(BlueprintInternalUseOnlyHierarchical)
-struct GAMEPLAYABILITIESEDITOR_API FGameplayAbilityAuditRow : public FTableRowBase
+struct FGameplayAbilityAuditRow : public FTableRowBase
 {
 	GENERATED_BODY()
 	
 	/** Fill this structure with data from a UBlueprint (GameplayAbility asset).  Return true if successful. */
-	virtual void FillDataFromGameplayAbilityBlueprint(const UBlueprint& GameplayAbilityBlueprint);
+	UE_API virtual void FillDataFromGameplayAbilityBlueprint(const UBlueprint& GameplayAbilityBlueprint);
 
 	/** Fill this structure with data from a UGameplayAbility (likely compiled from a UBlueprint).  Return true if successful. */
-	virtual void FillDataFromGameplayAbility(const UGameplayAbility& GameplayAbility);
+	UE_API virtual void FillDataFromGameplayAbility(const UGameplayAbility& GameplayAbility);
 
 protected:
 
@@ -127,3 +129,5 @@ namespace GameplayAbilityAudit
 {
 	GAMEPLAYABILITIESEDITOR_API TArray<UEdGraph*> GatherAllGraphsIncludingMacros(const UBlueprint& LoadedInstance);
 }
+
+#undef UE_API

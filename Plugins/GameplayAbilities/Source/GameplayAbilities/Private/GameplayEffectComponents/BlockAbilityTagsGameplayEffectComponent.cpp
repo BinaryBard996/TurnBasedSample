@@ -3,6 +3,8 @@
 #include "GameplayEffectComponents/BlockAbilityTagsGameplayEffectComponent.h"
 #include "Misc/DataValidation.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(BlockAbilityTagsGameplayEffectComponent)
+
 #define LOCTEXT_NAMESPACE "BlockAbilityTagsGameplayEffectComponent"
 
 void UBlockAbilityTagsGameplayEffectComponent::PostInitProperties()

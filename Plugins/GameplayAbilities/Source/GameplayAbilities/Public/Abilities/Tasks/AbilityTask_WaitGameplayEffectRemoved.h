@@ -7,6 +7,8 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitGameplayEffectRemoved.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWaitGameplayEffectRemovedDelegate, const FGameplayEffectRemovalInfo &, GameplayEffectRemovalInfo);
 
 class AActor;
@@ -15,8 +17,8 @@ class UPrimitiveComponent;
 /**
  *	Waits for the actor to activate another ability
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitGameplayEffectRemoved : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitGameplayEffectRemoved : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -26,22 +28,24 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitGameplayEffectRemoved : public UAbi
 	UPROPERTY(BlueprintAssignable)
 	FWaitGameplayEffectRemovedDelegate	InvalidHandle;
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	UFUNCTION()
-	void OnGameplayEffectRemoved(const FGameplayEffectRemovalInfo& InGameplayEffectRemovalInfo);
+	UE_API void OnGameplayEffectRemoved(const FGameplayEffectRemovalInfo& InGameplayEffectRemovalInfo);
 
 	/** Wait until the specified gameplay effect is removed. */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitGameplayEffectRemoved* WaitForGameplayEffectRemoved(UGameplayAbility* OwningAbility, FActiveGameplayEffectHandle Handle);
+	static UE_API UAbilityTask_WaitGameplayEffectRemoved* WaitForGameplayEffectRemoved(UGameplayAbility* OwningAbility, FActiveGameplayEffectHandle Handle);
 
 	FActiveGameplayEffectHandle Handle;
 
 protected:
 
-	virtual void OnDestroy(bool AbilityIsEnding) override;
+	UE_API virtual void OnDestroy(bool AbilityIsEnding) override;
 	bool Registered;
 
 	FDelegateHandle OnGameplayEffectRemovedDelegateHandle;
 	FDelegateHandle OnGameplayEffectRemovedDelegateHandle_Deprecated;
 };
+
+#undef UE_API

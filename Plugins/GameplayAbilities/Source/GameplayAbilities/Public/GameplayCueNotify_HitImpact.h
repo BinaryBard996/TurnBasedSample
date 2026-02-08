@@ -7,6 +7,8 @@
 #include "GameplayCueNotify_Static.h"
 #include "GameplayCueNotify_HitImpact.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UParticleSystem;
 class USoundBase;
 
@@ -15,15 +17,15 @@ class USoundBase;
  *	Still WIP - needs to be fleshed out more.
  */
 
-UCLASS(Blueprintable, meta = (DisplayName = "GCN Hit Impact (Deprecated)", Category = "GameplayCue", ShortTooltip = "This class is deprecated. Use UFortGameplayCueNotify_Burst (GCN Burst) instead."))
-class GAMEPLAYABILITIES_API UGameplayCueNotify_HitImpact : public UGameplayCueNotify_Static
+UCLASS(Blueprintable, meta = (DisplayName = "GCN Hit Impact (Deprecated)", Category = "GameplayCue", ShortTooltip = "This class is deprecated. Use UFortGameplayCueNotify_Burst (GCN Burst) instead."), MinimalAPI)
+class UGameplayCueNotify_HitImpact : public UGameplayCueNotify_Static
 {
 	GENERATED_UCLASS_BODY()
 
 	/** Does this GameplayCueNotify handle this type of GameplayCueEvent? */
-	virtual bool HandlesEvent(EGameplayCueEvent::Type EventType) const override;
+	UE_API virtual bool HandlesEvent(EGameplayCueEvent::Type EventType) const override;
 	
-	virtual void HandleGameplayCue(AActor* MyTarget, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
+	UE_API virtual void HandleGameplayCue(AActor* MyTarget, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters) override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GameplayCue)
 	TObjectPtr<USoundBase> Sound;
@@ -32,3 +34,5 @@ class GAMEPLAYABILITIES_API UGameplayCueNotify_HitImpact : public UGameplayCueNo
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GameplayCue)
 	TObjectPtr<UParticleSystem> ParticleSystem;
 };
+
+#undef UE_API

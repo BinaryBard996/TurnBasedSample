@@ -268,7 +268,7 @@ void FActiveGameplayCue::PreReplicatedRemove(const struct FActiveGameplayCueCont
 	if (bPredictivelyRemoved == false)
 	{
 		// If predicted ignore the add/remove
-		InArray.Owner->UpdateTagMap(GameplayCueTag, -1);
+		InArray.Owner->UpdateTagMap(GameplayCueTag, -1, EGameplayTagReplicationState::None);
 		InArray.Owner->InvokeGameplayCueEvent(GameplayCueTag, EGameplayCueEvent::Removed, Parameters);
 	}
 }
@@ -288,7 +288,7 @@ void FActiveGameplayCue::PostReplicatedAdd(const struct FActiveGameplayCueContai
 		UE_VLOG(PropertyOwner, LogGameplayCues, VeryVerbose, TEXT("%s::%hs %s %s"), *PropertyName, __func__, *GameplayCueTag.ToString(), *PredictionKey.ToString());
 	}
 
-	InArray.Owner->UpdateTagMap(GameplayCueTag, 1);
+	InArray.Owner->UpdateTagMap(GameplayCueTag, 1, EGameplayTagReplicationState::None);
 
 	if (PredictionKey.IsLocalClientKey() == false)
 	{
@@ -324,7 +324,7 @@ void FActiveGameplayCueContainer::AddCue(const FGameplayTag& Tag, const FPredict
 	NewCue.Parameters = Parameters;
 	MarkItemDirty(NewCue);
 	
-	Owner->UpdateTagMap(Tag, 1);
+	Owner->UpdateTagMap(Tag, 1, EGameplayTagReplicationState::None);
 }
 
 void FActiveGameplayCueContainer::RemoveCue(const FGameplayTag& Tag)
@@ -355,7 +355,7 @@ void FActiveGameplayCueContainer::RemoveCue(const FGameplayTag& Tag)
 
 		if (CountDelta > 0)
 		{
-			Owner->UpdateTagMap(Tag, -CountDelta);
+			Owner->UpdateTagMap(Tag, -CountDelta, EGameplayTagReplicationState::None);
 		}
 	}
 	
@@ -369,7 +369,7 @@ void FActiveGameplayCueContainer::RemoveCue(const FGameplayTag& Tag)
 			if (GameplayCueInterfacePrivate::bUseEqualTagCountAndRemovalCallbacks)
 			{
 				++CountDelta;
-				Owner->UpdateTagMap(Tag, -1);
+				Owner->UpdateTagMap(Tag, -1, EGameplayTagReplicationState::None);
 			}
 
 			Owner->InvokeGameplayCueEvent(Tag, EGameplayCueEvent::Removed, Cue.Parameters);
@@ -394,7 +394,7 @@ void FActiveGameplayCueContainer::RemoveAllCues()
 	for (int32 idx=0; idx < GameplayCues.Num(); ++idx)
 	{
 		FActiveGameplayCue& Cue = GameplayCues[idx];
-		Owner->UpdateTagMap(Cue.GameplayCueTag, -1);
+		Owner->UpdateTagMap(Cue.GameplayCueTag, -1, EGameplayTagReplicationState::None);
 		Owner->InvokeGameplayCueEvent(Cue.GameplayCueTag, EGameplayCueEvent::Removed, Cue.Parameters);
 	}
 }
@@ -417,7 +417,7 @@ void FActiveGameplayCueContainer::PredictiveRemove(const FGameplayTag& Tag)
 		if (Cue.GameplayCueTag == Tag && !Cue.bPredictivelyRemoved)
 		{
 			Cue.bPredictivelyRemoved = true;
-			Owner->UpdateTagMap(Tag, -1);
+			Owner->UpdateTagMap(Tag, -1, EGameplayTagReplicationState::None);
 			Owner->InvokeGameplayCueEvent(Tag, EGameplayCueEvent::Removed, Cue.Parameters);	
 			return;
 		}
@@ -431,7 +431,7 @@ void FActiveGameplayCueContainer::PredictiveAdd(const FGameplayTag& Tag, FPredic
 		return;
 	}
 
-	Owner->UpdateTagMap(Tag, 1);	
+	Owner->UpdateTagMap(Tag, 1, EGameplayTagReplicationState::None);
 	PredictionKey.NewRejectOrCaughtUpDelegate(FPredictionKeyEvent::CreateUObject(ToRawPtr(Owner), &UAbilitySystemComponent::OnPredictiveGameplayCueCatchup, Tag));
 }
 

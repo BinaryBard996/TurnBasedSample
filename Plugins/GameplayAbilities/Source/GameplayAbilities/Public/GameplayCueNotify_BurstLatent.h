@@ -7,6 +7,8 @@
 #include "GameplayCueNotifyTypes.h"
 #include "GameplayCueNotify_BurstLatent.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 
 /**
  * AGameplayCueNotify_BurstLatent
@@ -14,26 +16,26 @@
  *	This is an instanced gameplay cue notify for effects that are one-offs.
  *	Since it is instanced, it can do latent things like time lines or delays.
  */
-UCLASS(Blueprintable, notplaceable, Category = "GameplayCueNotify", Meta = (ShowWorldContextPin, DisplayName = "GCN Burst Latent", ShortTooltip = "A one-off GameplayCueNotify that can use latent actions such as timelines."))
-class GAMEPLAYABILITIES_API AGameplayCueNotify_BurstLatent : public AGameplayCueNotify_Actor
+UCLASS(Blueprintable, notplaceable, Category = "GameplayCueNotify", Meta = (ShowWorldContextPin, DisplayName = "GCN Burst Latent", ShortTooltip = "A one-off GameplayCueNotify that can use latent actions such as timelines."), MinimalAPI)
+class AGameplayCueNotify_BurstLatent : public AGameplayCueNotify_Actor
 {
 	GENERATED_BODY()
 
 public:
 
-	AGameplayCueNotify_BurstLatent();
+	UE_API AGameplayCueNotify_BurstLatent();
 
 protected:
 
-	virtual bool Recycle() override;
+	UE_API virtual bool Recycle() override;
 
-	virtual bool OnExecute_Implementation(AActor* Target, const FGameplayCueParameters& Parameters) override;
+	UE_API virtual bool OnExecute_Implementation(AActor* Target, const FGameplayCueParameters& Parameters) override;
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void OnBurst(AActor* Target, const FGameplayCueParameters& Parameters, const FGameplayCueNotify_SpawnResult& SpawnResults);
+	UE_API void OnBurst(AActor* Target, const FGameplayCueParameters& Parameters, const FGameplayCueNotify_SpawnResult& SpawnResults);
 
 #if WITH_EDITOR
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	UE_API virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif // #if WITH_EDITOR
 
 protected:
@@ -54,3 +56,5 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "GCN Effects")
 	FGameplayCueNotify_SpawnResult BurstSpawnResults;
 };
+
+#undef UE_API

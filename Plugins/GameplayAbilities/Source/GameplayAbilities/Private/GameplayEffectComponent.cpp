@@ -6,6 +6,8 @@
 #include "GameplayEffect.h"
 #include "Misc/DataValidation.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayEffectComponent)
+
 #define LOCTEXT_NAMESPACE "GameplayEffectComponent"
 
 UGameplayEffectComponent::UGameplayEffectComponent()

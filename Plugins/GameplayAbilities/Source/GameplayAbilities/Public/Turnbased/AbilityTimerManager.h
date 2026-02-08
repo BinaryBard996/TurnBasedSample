@@ -16,7 +16,7 @@ class GAMEPLAYABILITIES_API FAbilityTimerManager: public FTimerManager
 {
 public:
 	FAbilityTimerManager(UGameInstance* InGameInstance): FTimerManager(InGameInstance){ AbilityOwningGameInstance = InGameInstance; }
-	
+
 	void TickTurn(UAbilitySystemComponent* AbilitySystemComponent, int Delta = 1);
 	float GetAbilityTimerRemaining(UAbilitySystemComponent* AbilitySystemComponent, FTimerHandle& InHandle);
 	float GetAbilityCurrentTurn(UAbilitySystemComponent* AbilitySystemComponent) const;
@@ -27,7 +27,7 @@ public:
 	void SetAbilityTimerForNextTick(FTimerDelegate const& InDelegate);
 	void ClearAbilityTimerContainer(UAbilitySystemComponent* AbilitySystemComponent);
 	void ClearAllAbilityTimerContainers();
-	
+
 private:
 	const FAbilityTimerContainer* GetAbilityTimerContainer(UAbilitySystemComponent* AbilitySystemComponent) const;
 	FAbilityTimerContainer& GetAbilityTimerContainer(UAbilitySystemComponent* AbilitySystemComponent);

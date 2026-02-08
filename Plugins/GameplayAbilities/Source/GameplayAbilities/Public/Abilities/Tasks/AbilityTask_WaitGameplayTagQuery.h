@@ -5,6 +5,8 @@
 
 #include "AbilityTask_WaitGameplayTagQuery.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FWaitGameplayTagQueryDelegate);
 
 /** This enum defines the condition in which the wait gameplay tag query node will trigger. */
@@ -16,17 +18,17 @@ enum class EWaitGameplayTagQueryTriggerCondition : uint8
 };
 
 /** This class defines a node to wait on a gameplay tag query. */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitGameplayTagQuery : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitGameplayTagQuery : public UAbilityTask
 {
 	GENERATED_BODY()
 	
 public:
 	/** Activates this AbilityTask. */
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 	
 	/** Sets the external target that this node whould use for checking tags. */
-	void SetExternalTarget(const AActor* Actor);
+	UE_API void SetExternalTarget(const AActor* Actor);
 
 	/**
 	 * 	Wait until the given gameplay tag query has become true or false, based on TriggerCondition. 
@@ -36,7 +38,7 @@ public:
 	 *  event. It will keep listening as long as bOnlyTriggerOnce = false.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitGameplayTagQuery* WaitGameplayTagQuery(UGameplayAbility* OwningAbility, 
+	static UE_API UAbilityTask_WaitGameplayTagQuery* WaitGameplayTagQuery(UGameplayAbility* OwningAbility, 
 																   const FGameplayTagQuery TagQuery, 
 																   const AActor* InOptionalExternalTarget = nullptr, 
 																   const EWaitGameplayTagQueryTriggerCondition TriggerCondition = EWaitGameplayTagQueryTriggerCondition::WhenTrue, 
@@ -46,16 +48,16 @@ protected:
 
 	/** This will update the tags in the TargetTags container to reflect that tags that are on the target ASC. */
 	UFUNCTION()
-	void UpdateTargetTags(const FGameplayTag Tag, int32 NewCount);
+	UE_API void UpdateTargetTags(const FGameplayTag Tag, int32 NewCount);
 
 	/** This will evaluate the TargetTags using the given TagQuery, executing the Trigger delegate if needed. */
-	void EvaluateTagQuery();
+	UE_API void EvaluateTagQuery();
 
 	/** This gets the ASC to use to listen to tag changed events. */
-	UAbilitySystemComponent* GetTargetASC();
+	UE_API UAbilitySystemComponent* GetTargetASC();
 
 	/** This will handle cleaning up any registered delegates. */
-	virtual void OnDestroy(bool AbilityIsEnding) override;
+	UE_API virtual void OnDestroy(bool AbilityIsEnding) override;
 
 	/** This is the tag query to evaluate for triggering this node. */
 	FGameplayTagQuery TagQuery;
@@ -90,3 +92,5 @@ protected:
 	/** This indicates if this node should only trigger once, or any number of times. */
 	bool bOnlyTriggerOnce = false;
 };
+
+#undef UE_API

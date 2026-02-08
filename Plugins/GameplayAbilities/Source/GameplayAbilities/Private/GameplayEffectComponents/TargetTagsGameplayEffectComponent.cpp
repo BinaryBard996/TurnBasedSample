@@ -3,6 +3,8 @@
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "Misc/DataValidation.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(TargetTagsGameplayEffectComponent)
+
 #define LOCTEXT_NAMESPACE "TargetTagsGameplayEffectComponent"
 
 void UTargetTagsGameplayEffectComponent::PostInitProperties()

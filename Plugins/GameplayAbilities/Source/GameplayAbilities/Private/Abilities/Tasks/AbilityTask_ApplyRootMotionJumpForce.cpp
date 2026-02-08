@@ -96,7 +96,7 @@ void UAbilityTask_ApplyRootMotionJumpForce::SharedInitAndApply()
 		StartTime = GetWorld()->GetTimeSeconds();
 		EndTime = StartTime + Duration;
 
-		if (MovementComponent)
+		if (MovementComponent.IsValid())
 		{
 			ForceName = ForceName.IsNone() ? FName("AbilityTaskApplyRootMotionJumpForce") : ForceName;
 			TSharedPtr<FRootMotionSource_JumpForce> JumpForce = MakeShared<FRootMotionSource_JumpForce>();
@@ -140,9 +140,8 @@ void UAbilityTask_ApplyRootMotionJumpForce::Finish()
 				OnFinish.Broadcast();
 			}
 		}
+		EndTask();
 	}
-
-	EndTask();
 }
 
 void UAbilityTask_ApplyRootMotionJumpForce::TickTask(float DeltaTime)
@@ -175,7 +174,8 @@ void UAbilityTask_ApplyRootMotionJumpForce::TickTask(float DeltaTime)
 	}
 	else
 	{
-		Finish();
+		bIsFinished = true;
+		EndTask();
 	}
 }
 
@@ -195,7 +195,8 @@ void UAbilityTask_ApplyRootMotionJumpForce::GetLifetimeReplicatedProps(TArray< F
 
 void UAbilityTask_ApplyRootMotionJumpForce::PreDestroyFromReplication()
 {
-	Finish();
+	bIsFinished = true;
+	EndTask();
 }
 
 void UAbilityTask_ApplyRootMotionJumpForce::OnDestroy(bool AbilityIsEnding)
@@ -206,7 +207,7 @@ void UAbilityTask_ApplyRootMotionJumpForce::OnDestroy(bool AbilityIsEnding)
 		Character->LandedDelegate.RemoveDynamic(this, &UAbilityTask_ApplyRootMotionJumpForce::OnLandedCallback);
 	}
 
-	if (MovementComponent)
+	if (MovementComponent.IsValid())
 	{
 		MovementComponent->RemoveRootMotionSourceByID(RootMotionSourceID);
 	}

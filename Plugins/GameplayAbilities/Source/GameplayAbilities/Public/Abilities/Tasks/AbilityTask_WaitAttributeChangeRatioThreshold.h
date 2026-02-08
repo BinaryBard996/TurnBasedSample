@@ -9,6 +9,8 @@
 #include "Abilities/Tasks/AbilityTask_WaitAttributeChange.h"
 #include "AbilityTask_WaitAttributeChangeRatioThreshold.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 struct FGameplayEffectModCallbackData;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FWaitAttributeChangeRatioThresholdDelegate, bool, bMatchesComparison, float, CurrentRatio);
@@ -16,22 +18,22 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FWaitAttributeChangeRatioThresholdD
 /**
  *	Waits for the ratio between two attributes to match a threshold
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitAttributeChangeRatioThreshold : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitAttributeChangeRatioThreshold : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
 	UPROPERTY(BlueprintAssignable)
 	FWaitAttributeChangeRatioThresholdDelegate OnChange;
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
-	void OnNumeratorAttributeChange(const FOnAttributeChangeData& CallbackData);
-	void OnDenominatorAttributeChange(const FOnAttributeChangeData& CallbackData);
+	UE_API void OnNumeratorAttributeChange(const FOnAttributeChangeData& CallbackData);
+	UE_API void OnDenominatorAttributeChange(const FOnAttributeChangeData& CallbackData);
 
 	/** Wait on attribute ratio change meeting a comparison threshold. */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitAttributeChangeRatioThreshold* WaitForAttributeChangeRatioThreshold(UGameplayAbility* OwningAbility, FGameplayAttribute AttributeNumerator, FGameplayAttribute AttributeDenominator, TEnumAsByte<EWaitAttributeChangeComparison::Type> ComparisonType, float ComparisonValue, bool bTriggerOnce, AActor* OptionalExternalOwner = nullptr);
+	static UE_API UAbilityTask_WaitAttributeChangeRatioThreshold* WaitForAttributeChangeRatioThreshold(UGameplayAbility* OwningAbility, FGameplayAttribute AttributeNumerator, FGameplayAttribute AttributeDenominator, TEnumAsByte<EWaitAttributeChangeComparison::Type> ComparisonType, float ComparisonValue, bool bTriggerOnce, AActor* OptionalExternalOwner = nullptr);
 
 	FGameplayAttribute AttributeNumerator;
 	FGameplayAttribute AttributeDenominator;
@@ -53,12 +55,14 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UAbilitySystemComponent> ExternalOwner;
 
-	UAbilitySystemComponent* GetFocusedASC();
+	UE_API UAbilitySystemComponent* GetFocusedASC();
 
-	void OnAttributeChange();
-	void OnRatioChange();
+	UE_API void OnAttributeChange();
+	UE_API void OnRatioChange();
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
-	bool DoesValuePassComparison(float ValueNumerator, float ValueDenominator) const;
+	UE_API bool DoesValuePassComparison(float ValueNumerator, float ValueDenominator) const;
 };
+
+#undef UE_API

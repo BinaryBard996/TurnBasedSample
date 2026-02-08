@@ -241,7 +241,10 @@ void UAbilitySystemComponent::ClearActorInfo()
 
 void UAbilitySystemComponent::OnRep_OwningActor()
 {
-	check(AbilityActorInfo.IsValid());
+	if (!ensure(AbilityActorInfo.IsValid()))
+	{
+		return;
+	}
 
 	AActor* LocalOwnerActor = GetOwnerActor();
 	AActor* LocalAvatarActor = GetAvatarActor_Direct();
@@ -628,8 +631,8 @@ void UAbilitySystemComponent::OnRemoveAbility(FGameplayAbilitySpec& Spec)
 		{
 			if (Instance->IsActive())
 			{
-				// End the ability but don't replicate it, OnRemoveAbility gets replicated
-				bool bReplicateEndAbility = false;
+				// ReplicateEndAbility if the GA itself isn't replicated.
+				bool bReplicateEndAbility = Instance->GetReplicationPolicy() == EGameplayAbilityReplicationPolicy::ReplicateNo;
 				bool bWasCancelled = false;
 				Instance->EndAbility(Instance->CurrentSpecHandle, Instance->CurrentActorInfo, Instance->CurrentActivationInfo, bReplicateEndAbility, bWasCancelled);
 			}
@@ -774,10 +777,9 @@ void UAbilitySystemComponent::CheckForClearedAbilities()
 	for (int32 i = 0; i < ReplicatedAbilities.Num(); i++)
 	{
 		UGameplayAbility* Ability = ReplicatedAbilities[i];
-
 		if (!IsValid(Ability))
 		{
-			if (IsUsingRegisteredSubObjectList())
+			if (Ability && IsUsingRegisteredSubObjectList())
 			{
 				RemoveReplicatedSubObject(Ability);
 			}
@@ -1327,14 +1329,14 @@ void UAbilitySystemComponent::CancelAbilitySpec(FGameplayAbilitySpec& Spec, UGam
 		{
 			if (InstanceAbility && Ignore != InstanceAbility)
 			{
-				InstanceAbility->CancelAbility(Spec.Handle, ActorInfo, InstanceAbility->GetCurrentActivationInfoRef(), true);
+				InstanceAbility->CancelAbility(Spec.Handle, ActorInfo, InstanceAbility->GetCurrentActivationInfoRef(), !bDestroyActiveStateInitiated);
 			}
 		}
 	}
 	else
 	{
 		// Try to cancel the non instanced, this may not necessarily work
-		Spec.Ability->CancelAbility(Spec.Handle, ActorInfo, FGameplayAbilityActivationInfo(), true);
+		Spec.Ability->CancelAbility(Spec.Handle, ActorInfo, FGameplayAbilityActivationInfo(), !bDestroyActiveStateInitiated);
 	}
 	MarkAbilitySpecDirty(Spec);
 }
@@ -2349,6 +2351,13 @@ void UAbilitySystemComponent::ClientActivateAbilitySucceedWithEventData_Implemen
 
 	check(AbilityToActivate);
 	ensure(AbilityActorInfo.IsValid());
+	
+	if (!AbilityActorInfo->OwnerActor.IsValid())
+	{
+		// When the owner is explicitly switched and then gets destroyed, the OwnerActor could become invalid
+		UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: server confirmed [%s] %s (Prediction key %s), but failed with invalid OwnerActor"), *GetNameSafe(GetOwner()), *Handle.ToString(), *GetNameSafe(AbilityToActivate), *PredictionKey.ToString());
+		return;
+	}
 
 	UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: Server Confirmed [%s] %s. PredictionKey: %s"), *GetNameSafe(GetOwner()), *Handle.ToString(), *GetNameSafe(AbilityToActivate), *PredictionKey.ToString());
 	UE_VLOG(GetOwner(), VLogAbilitySystem, Verbose, TEXT("Server Confirmed [%s] %s. PredictionKey: %s"), *Handle.ToString(), *GetNameSafe(AbilityToActivate), *PredictionKey.ToString());
@@ -2459,7 +2468,7 @@ bool UAbilitySystemComponent::TriggerAbilityFromGameplayEvent(FGameplayAbilitySp
 	}
 
 	const UGameplayAbility* InstancedAbility = Spec->GetPrimaryInstance();
-	const UGameplayAbility* Ability = InstancedAbility ? InstancedAbility : Spec->Ability;
+	const UGameplayAbility* Ability = InstancedAbility ? InstancedAbility : Spec->Ability.Get();
 	if (!ensure(Ability))
 	{
 		return false;
@@ -2990,6 +2999,11 @@ void UAbilitySystemComponent::ClearDebugInstantEffects()
 
 float UAbilitySystemComponent::PlayMontage(UGameplayAbility* InAnimatingAbility, FGameplayAbilityActivationInfo ActivationInfo, UAnimMontage* NewAnimMontage, float InPlayRate, FName StartSectionName, float StartTimeSeconds)
 {
+	return PlayMontageInternal(InAnimatingAbility, ActivationInfo, NewAnimMontage, InPlayRate, StartSectionName, StartTimeSeconds, [](FGameplayAbilityRepAnimMontage&){});
+}
+
+float UAbilitySystemComponent::PlayMontageInternal(UGameplayAbility* InAnimatingAbility, FGameplayAbilityActivationInfo ActivationInfo, UAnimMontage* NewAnimMontage, float InPlayRate, FName StartSectionName, float StartTimeSeconds, TFunctionRef<void(FGameplayAbilityRepAnimMontage&)> MutateRepAnimMontageFunction)
+{
 	float Duration = -1.f;
 
 	UAnimInstance* AnimInstance = AbilityActorInfo.IsValid() ? AbilityActorInfo->GetAnimInstance() : nullptr;
@@ -3058,6 +3072,9 @@ float UAbilitySystemComponent::PlayMontage(UGameplayAbility* InAnimatingAbility,
 					MutableRepAnimMontageInfo.SlotName = NewAnimMontage->SlotAnimTracks[0].SlotName;
 					MutableRepAnimMontageInfo.BlendOutTime = NewAnimMontage->GetDefaultBlendInTime();
 				}
+
+				// Give the caller the opportunity to modify the rep info for this montage, used by "slot animation as dynamic montage" to replicate play count parameter
+				MutateRepAnimMontageFunction(MutableRepAnimMontageInfo);
 
 				// Update parameters that change during Montage life time.
 				AnimMontage_UpdateReplicatedData();
@@ -3270,7 +3287,7 @@ void UAbilitySystemComponent::OnRep_ReplicatedAnimMontage()
 		if(ConstRepAnimMontageInfo.Animation)
 		{
 			// New Montage to play
-			UAnimSequenceBase* LocalAnimation = LocalAnimMontageInfo.AnimMontage && LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage;
+			UAnimSequenceBase* LocalAnimation = LocalAnimMontageInfo.AnimMontage && LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage.Get();
 			if ((LocalAnimation != ConstRepAnimMontageInfo.Animation) ||
 			    (LocalAnimMontageInfo.PlayInstanceId != ConstRepAnimMontageInfo.PlayInstanceId))
 			{
@@ -3282,12 +3299,26 @@ void UAbilitySystemComponent::OnRep_ReplicatedAnimMontage()
 				}
 				else
 				{
-					PlaySlotAnimationAsDynamicMontageSimulated(
-						ConstRepAnimMontageInfo.Animation,
-						ConstRepAnimMontageInfo.SlotName,
-						ConstRepAnimMontageInfo.BlendTime,
-						ConstRepAnimMontageInfo.BlendOutTime,
-						ConstRepAnimMontageInfo.PlayRate);
+					if (ConstRepAnimMontageInfo.PlayCount == 1.0f)
+					{
+						PlaySlotAnimationAsDynamicMontageSimulated(
+							ConstRepAnimMontageInfo.Animation,
+							ConstRepAnimMontageInfo.SlotName,
+							ConstRepAnimMontageInfo.BlendTime,
+							ConstRepAnimMontageInfo.BlendOutTime,
+							ConstRepAnimMontageInfo.PlayRate);
+					}
+					else
+					{
+						PlaySlotAnimationAsDynamicMontage_WithFractionalLoopsSimulated(
+							ConstRepAnimMontageInfo.Animation,
+							ConstRepAnimMontageInfo.SlotName,
+							ConstRepAnimMontageInfo.BlendTime,
+							ConstRepAnimMontageInfo.BlendOutTime,
+							ConstRepAnimMontageInfo.PlayRate,
+							ConstRepAnimMontageInfo.PlayCount
+						);
+					}
 				}
 			}
 
@@ -3484,7 +3515,7 @@ void UAbilitySystemComponent::CurrentMontageJumpToSection(FName SectionName)
 		// If we are NOT the authority, then let the server handling jumping the montage.
 		if (!IsOwnerActorAuthoritative())
 		{	
-			UAnimSequenceBase* Animation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage;
+			UAnimSequenceBase* Animation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage.Get();
 			ServerCurrentMontageJumpToSectionName(Animation, SectionName);
 		}
 	}
@@ -3506,7 +3537,7 @@ void UAbilitySystemComponent::CurrentMontageSetNextSectionName(FName FromSection
 		else
 		{
 			float CurrentPosition = AnimInstance->Montage_GetPosition(LocalAnimMontageInfo.AnimMontage);
-			UAnimSequenceBase* Animation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage;
+			UAnimSequenceBase* Animation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage.Get();
 			ServerCurrentMontageSetNextSectionName(Animation, CurrentPosition, FromSectionName, ToSectionName);
 		}
 	}
@@ -3527,8 +3558,8 @@ void UAbilitySystemComponent::CurrentMontageSetPlayRate(float InPlayRate)
 		}
 		else
 		{
-			UAnimSequenceBase* Animation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage;
-			ServerCurrentMontageSetPlayRate(LocalAnimMontageInfo.AnimMontage, InPlayRate);
+			UAnimSequenceBase* Animation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage.Get();
+			ServerCurrentMontageSetPlayRate(Animation, InPlayRate);
 		}
 	}
 }
@@ -3543,7 +3574,7 @@ void UAbilitySystemComponent::ServerCurrentMontageSetNextSectionName_Implementat
 	UAnimInstance* AnimInstance = AbilityActorInfo.IsValid() ? AbilityActorInfo->GetAnimInstance() : nullptr;
 	if (AnimInstance && LocalAnimMontageInfo.AnimMontage)
 	{
-		UAnimSequenceBase* CurrentAnimation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage;
+		UAnimSequenceBase* CurrentAnimation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage.Get();
 		if (ClientAnimation == CurrentAnimation)
 		{
 			UAnimMontage* CurrentAnimMontage = LocalAnimMontageInfo.AnimMontage;
@@ -3583,7 +3614,7 @@ void UAbilitySystemComponent::ServerCurrentMontageJumpToSectionName_Implementati
 	UAnimInstance* AnimInstance = AbilityActorInfo.IsValid() ? AbilityActorInfo->GetAnimInstance() : nullptr;
 	if (AnimInstance && LocalAnimMontageInfo.AnimMontage)
 	{
-		UAnimSequenceBase* CurrentAnimation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage;
+		UAnimSequenceBase* CurrentAnimation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage.Get();
 		if (ClientAnimation == CurrentAnimation)
 		{
 			UAnimMontage* CurrentAnimMontage = LocalAnimMontageInfo.AnimMontage;
@@ -3623,7 +3654,7 @@ void UAbilitySystemComponent::ServerCurrentMontageSetPlayRate_Implementation(UAn
 	UAnimInstance* AnimInstance = AbilityActorInfo.IsValid() ? AbilityActorInfo->GetAnimInstance() : nullptr;
 	if (AnimInstance && LocalAnimMontageInfo.AnimMontage)
 	{
-		UAnimSequenceBase* CurrentAnimation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage;
+		UAnimSequenceBase* CurrentAnimation = LocalAnimMontageInfo.AnimMontage->IsDynamicMontage() ? LocalAnimMontageInfo.AnimMontage->GetFirstAnimReference() : LocalAnimMontageInfo.AnimMontage.Get();
 		if (ClientAnimation == CurrentAnimation)
 		{
 			UAnimMontage* CurrentAnimMontage = LocalAnimMontageInfo.AnimMontage;
@@ -3651,6 +3682,23 @@ UAnimMontage* UAbilitySystemComponent::PlaySlotAnimationAsDynamicMontageSimulate
 {
 	UAnimMontage* DynamicMontage = UAnimMontage::CreateSlotAnimationAsDynamicMontage(AnimAsset, SlotName, BlendInTime, BlendOutTime, InPlayRate, 1, -1.0f, 0.0f);
 	PlayMontageSimulated(DynamicMontage, InPlayRate, NAME_None);
+	return DynamicMontage;
+}
+
+UAnimMontage* UAbilitySystemComponent::PlaySlotAnimationAsDynamicMontage_WithFractionalLoopsSimulated(UAnimSequenceBase* AnimAsset, FName SlotName, float BlendInTime, float BlendOutTime, float InPlayRate, float PlayCount)
+{
+	UAnimMontage* DynamicMontage = UAnimMontage::CreateSlotAnimationAsDynamicMontage_WithFractionalLoops(AnimAsset, SlotName, BlendInTime, BlendOutTime, PlayCount);
+	PlayMontageSimulated(DynamicMontage, InPlayRate, NAME_None);
+	return DynamicMontage;
+}
+
+UAnimMontage* UAbilitySystemComponent::PlaySlotAnimationAsDynamicMontage_WithFractionalLoops(UGameplayAbility* AnimatingAbility, FGameplayAbilityActivationInfo ActivationInfo, UAnimSequenceBase* AnimAsset, FName SlotName, float BlendInTime, float BlendOutTime, float InPlayRate, float StartTimeSeconds, float PlayCount)
+{
+	UAnimMontage* DynamicMontage = UAnimMontage::CreateSlotAnimationAsDynamicMontage_WithFractionalLoops(AnimAsset, SlotName, BlendInTime, BlendOutTime, PlayCount);
+	PlayMontageInternal(AnimatingAbility, ActivationInfo, DynamicMontage, InPlayRate, NAME_None, StartTimeSeconds, [PlayCount](FGameplayAbilityRepAnimMontage& MutableRepAnimMontageInfo)
+		{
+			MutableRepAnimMontageInfo.PlayCount = PlayCount;
+		});
 	return DynamicMontage;
 }
 
@@ -3748,7 +3796,7 @@ bool UAbilitySystemComponent::IsAnimatingAbility(UGameplayAbility* InAbility) co
 	return (LocalAnimMontageInfo.AnimatingAbility.Get() == InAbility);
 }
 
-UGameplayAbility* UAbilitySystemComponent::GetAnimatingAbility()
+UGameplayAbility* UAbilitySystemComponent::GetAnimatingAbility() const
 {
 	return LocalAnimMontageInfo.AnimatingAbility.Get();
 }

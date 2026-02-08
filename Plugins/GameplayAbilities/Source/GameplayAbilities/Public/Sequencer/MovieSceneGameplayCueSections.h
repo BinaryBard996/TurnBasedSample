@@ -85,7 +85,7 @@ struct FMovieSceneGameplayCueChannel : public FMovieSceneChannel
 	 *
 	 * @return An object that is able to manipulate this channel's data
 	 */
-	FORCEINLINE TMovieSceneChannelData<FMovieSceneGameplayCueKey> GetData()
+	inline TMovieSceneChannelData<FMovieSceneGameplayCueKey> GetData()
 	{
 		return TMovieSceneChannelData<FMovieSceneGameplayCueKey>(&KeyTimes, &KeyValues, this, &KeyHandles);
 	}
@@ -95,7 +95,7 @@ struct FMovieSceneGameplayCueChannel : public FMovieSceneChannel
 	 *
 	 * @return An object that is able to interrogate this channel's data
 	 */
-	FORCEINLINE TMovieSceneChannelData<const FMovieSceneGameplayCueKey> GetData() const
+	inline TMovieSceneChannelData<const FMovieSceneGameplayCueKey> GetData() const
 	{
 		return TMovieSceneChannelData<const FMovieSceneGameplayCueKey>(&KeyTimes, &KeyValues);
 	}
@@ -109,7 +109,7 @@ public:
 	virtual void DuplicateKeys(TArrayView<const FKeyHandle> InHandles, TArrayView<FKeyHandle> OutNewHandles) override;
 	virtual void DeleteKeys(TArrayView<const FKeyHandle> InHandles) override;
 	virtual void DeleteKeysFrom(FFrameNumber InTime, bool bDeleteKeysBefore) override;
-	virtual void ChangeFrameResolution(FFrameRate SourceRate, FFrameRate DestinationRate) override;
+	virtual void RemapTimes(const UE::MovieScene::IRetimingInterface& Retimer) override;
 	virtual TRange<FFrameNumber> ComputeEffectiveRange() const override;
 	virtual int32 GetNumKeys() const override;
 	virtual void Reset() override;

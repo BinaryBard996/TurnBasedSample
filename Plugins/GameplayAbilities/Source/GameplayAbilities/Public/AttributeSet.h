@@ -8,15 +8,17 @@
 #include "Engine/DataTable.h"
 #include "AttributeSet.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 class UAttributeSet;
 class UCurveTable;
 struct FGameplayAbilityActorInfo;
 struct FAggregator;
 
-/** Place in an AttributeSet to create an attribute that can be accesed using FGameplayAttribute. It is strongly encouraged to use this instead of raw float attributes */
+/** Place in an AttributeSet to create an attribute that can be accessed using FGameplayAttribute. It is strongly encouraged to use this instead of raw float attributes */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAttributeData
+struct FGameplayAttributeData
 {
 	GENERATED_BODY()
 	FGameplayAttributeData()
@@ -33,16 +35,16 @@ struct GAMEPLAYABILITIES_API FGameplayAttributeData
 	{}
 
 	/** Returns the current value, which includes temporary buffs */
-	float GetCurrentValue() const;
+	UE_API float GetCurrentValue() const;
 
 	/** Modifies current value, normally only called by ability system or during initialization */
-	virtual void SetCurrentValue(float NewValue);
+	UE_API virtual void SetCurrentValue(float NewValue);
 
 	/** Returns the base value which only includes permanent changes */
-	float GetBaseValue() const;
+	UE_API float GetBaseValue() const;
 
 	/** Modifies the permanent base value, normally only called by ability system or during initialization */
-	virtual void SetBaseValue(float NewValue);
+	UE_API virtual void SetBaseValue(float NewValue);
 
 protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Attribute")
@@ -54,7 +56,7 @@ protected:
 
 /** Describes a FGameplayAttributeData or float property inside an attribute set. Using this provides editor UI and helper functions */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayAttribute
+struct FGameplayAttribute
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -64,11 +66,12 @@ struct GAMEPLAYABILITIES_API FGameplayAttribute
 	{
 	}
 
-	FGameplayAttribute(FProperty *NewProperty);
+	UE_API FGameplayAttribute(FProperty *NewProperty);
 
+	/** Returns true if our Attribute has a valid resolved Field */
 	bool IsValid() const
 	{
-		return Attribute != nullptr;
+		return Attribute.Get() != nullptr;
 	}
 
 	/** Set up from a FProperty inside a set */
@@ -101,27 +104,30 @@ struct GAMEPLAYABILITIES_API FGameplayAttribute
 	}
 
 	/** Returns true if this is one of the special attributes defined on the AbilitySystemComponent itself */
-	bool IsSystemAttribute() const;
+	UE_API bool IsSystemAttribute() const;
+
+	/** Returns whether a property is able to represent a Gameplay Attribute. Does not check whether the property is owned by an attribute set. **/
+	static UE_API bool IsSupportedProperty(const FProperty* Prop);
 
 	/** Returns true if the variable associated with Property is of type FGameplayAttributeData or one of its subclasses */
-	static bool IsGameplayAttributeDataProperty(const FProperty* Property);
+	static UE_API bool IsGameplayAttributeDataProperty(const FProperty* Property);
 
 	/** Modifies the current value of an attribute, will not modify base value if that is supported */
-	void SetNumericValueChecked(float& NewValue, class UAttributeSet* Dest) const;
+	UE_API void SetNumericValueChecked(float& NewValue, class UAttributeSet* Dest) const;
 
 	/** Returns the current value of an attribute */
-	float GetNumericValue(const UAttributeSet* Src) const;
-	float GetNumericValueChecked(const UAttributeSet* Src) const;
+	UE_API float GetNumericValue(const UAttributeSet* Src) const;
+	UE_API float GetNumericValueChecked(const UAttributeSet* Src) const;
 
 	/** Returns the AttributeData, will fail if this is a float attribute */
-	const FGameplayAttributeData* GetGameplayAttributeData(const UAttributeSet* Src) const;
-	const FGameplayAttributeData* GetGameplayAttributeDataChecked(const UAttributeSet* Src) const;
-	FGameplayAttributeData* GetGameplayAttributeData(UAttributeSet* Src) const;
-	FGameplayAttributeData* GetGameplayAttributeDataChecked(UAttributeSet* Src) const;
+	UE_API const FGameplayAttributeData* GetGameplayAttributeData(const UAttributeSet* Src) const;
+	UE_API const FGameplayAttributeData* GetGameplayAttributeDataChecked(const UAttributeSet* Src) const;
+	UE_API FGameplayAttributeData* GetGameplayAttributeData(UAttributeSet* Src) const;
+	UE_API FGameplayAttributeData* GetGameplayAttributeDataChecked(UAttributeSet* Src) const;
 	
 	/** Equality/Inequality operators */
-	bool operator==(const FGameplayAttribute& Other) const;
-	bool operator!=(const FGameplayAttribute& Other) const;
+	UE_API bool operator==(const FGameplayAttribute& Other) const;
+	UE_API bool operator!=(const FGameplayAttribute& Other) const;
 
 	friend uint32 GetTypeHash( const FGameplayAttribute& InAttribute )
 	{
@@ -137,7 +143,7 @@ struct GAMEPLAYABILITIES_API FGameplayAttribute
 
 #if WITH_EDITORONLY_DATA
 	/** Custom serialization */
-	void PostSerialize(const FArchive& Ar);
+	UE_API void PostSerialize(const FArchive& Ar);
 #endif
 
 	/** Name of the attribute, usually the same as property name */
@@ -145,7 +151,7 @@ struct GAMEPLAYABILITIES_API FGameplayAttribute
 	FString AttributeName;
 
 	/** In editor, this will filter out properties with meta tag "HideInDetailsView" or equal to FilterMetaStr. In non editor, it returns all properties */
-	static void GetAllAttributeProperties(TArray<FProperty*>& OutProperties, FString FilterMetaStr=FString(), bool UseEditorOnlyData=true);
+	static UE_API void GetAllAttributeProperties(TArray<FProperty*>& OutProperties, FString FilterMetaStr=FString(), bool UseEditorOnlyData=true);
 
 private:
 	friend class FAttributePropertyDetails;
@@ -176,27 +182,27 @@ struct TStructOpsTypeTraits< FGameplayAttribute > : public TStructOpsTypeTraitsB
  * It often desired to have several sets per project that inherit from each other
  * You could make a base health set, then have a player set that inherits from it and adds more attributes
  */
-UCLASS(DefaultToInstanced, Blueprintable)
-class GAMEPLAYABILITIES_API UAttributeSet : public UObject
+UCLASS(DefaultToInstanced, Blueprintable, MinimalAPI)
+class UAttributeSet : public UObject
 {
 	GENERATED_UCLASS_BODY()
 
 public:
 	// Populates (without emptying) a TArray with all FGameplayAttributes from an attribute set class.
-	static void GetAttributesFromSetClass(const TSubclassOf<UAttributeSet>& AttributeSetClass, TArray<FGameplayAttribute>& Attributes);
+	static UE_API void GetAttributesFromSetClass(const TSubclassOf<UAttributeSet>& AttributeSetClass, TArray<FGameplayAttribute>& Attributes);
 
 	/** Override to disable initialization for specific properties */
 	virtual bool ShouldInitProperty(bool FirstInit, FProperty* PropertyToInit) const { return true; }
 
 	/**
 	 *	Called just before modifying the value of an attribute. AttributeSet can make additional modifications here. Return true to continue, or false to throw out the modification.
-	 *	Note this is only called during an 'execute'. E.g., a modification to the 'base value' of an attribute. It is not called during an application of a GameplayEffect, such as a 5 ssecond +10 movement speed buff.
+	 *	Note this is only called during an 'execute'. E.g., a modification to the 'base value' of an attribute. It is not called during an application of a GameplayEffect, such as a 5 second +10 movement speed buff.
 	 */	
 	virtual bool PreGameplayEffectExecute(struct FGameplayEffectModCallbackData &Data) { return true; }
 	
 	/**
 	 *	Called just after a GameplayEffect is executed to modify the base value of an attribute. No more changes can be made.
-	 *	Note this is only called during an 'execute'. E.g., a modification to the 'base value' of an attribute. It is not called during an application of a GameplayEffect, such as a 5 ssecond +10 movement speed buff.
+	 *	Note this is only called during an 'execute'. E.g., a modification to the 'base value' of an attribute. It is not called during an application of a GameplayEffect, such as a 5 second +10 movement speed buff.
 	 */
 	virtual void PostGameplayEffectExecute(const struct FGameplayEffectModCallbackData &Data) { }
 
@@ -232,30 +238,28 @@ public:
 	virtual void OnAttributeAggregatorCreated(const FGameplayAttribute& Attribute, FAggregator* NewAggregator) const { }
 
 	/** This signifies the attribute set can be ID'd by name over the network. */
-	void SetNetAddressable();
+	UE_API void SetNetAddressable();
 
 	/** Initializes attribute data from a meta DataTable */
-	virtual void InitFromMetaDataTable(const UDataTable* DataTable);
+	UE_API virtual void InitFromMetaDataTable(const UDataTable* DataTable);
 
 	/** Gets information about owning actor */
-	AActor* GetOwningActor() const;
-	UAbilitySystemComponent* GetOwningAbilitySystemComponent() const;
-	UAbilitySystemComponent* GetOwningAbilitySystemComponentChecked() const;
-	FGameplayAbilityActorInfo* GetActorInfo() const;
+	UE_API AActor* GetOwningActor() const;
+	UE_API UAbilitySystemComponent* GetOwningAbilitySystemComponent() const;
+	UE_API UAbilitySystemComponent* GetOwningAbilitySystemComponentChecked() const;
+	UE_API FGameplayAbilityActorInfo* GetActorInfo() const;
 
 	/** Print debug information to the log */
-	virtual void PrintDebug();
+	UE_API virtual void PrintDebug();
 
 	// Overrides
-	virtual bool IsNameStableForNetworking() const override;
-	virtual bool IsSupportedForNetworking() const override;
-	virtual void PreNetReceive() override;
-	virtual void PostNetReceive() override;
+	UE_API virtual bool IsNameStableForNetworking() const override;
+	UE_API virtual bool IsSupportedForNetworking() const override;
+	UE_API virtual void PreNetReceive() override;
+	UE_API virtual void PostNetReceive() override;
 
-#if UE_WITH_IRIS
 	/** Register all replication fragments */
-	virtual void RegisterReplicationFragments(UE::Net::FFragmentRegistrationContext& Context, UE::Net::EFragmentRegistrationFlags RegistrationFlags) override;
-#endif // UE_WITH_IRIS
+	UE_API virtual void RegisterReplicationFragments(UE::Net::FFragmentRegistrationContext& Context, UE::Net::EFragmentRegistrationFlags RegistrationFlags) override;
 protected:
 	/** Is this attribute set safe to ID over the network by name?  */
 	uint32 bNetAddressable : 1;
@@ -265,13 +269,13 @@ protected:
  *	DataTable that allows us to define meta data about attributes. Still a work in progress.
  */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FAttributeMetaData : public FTableRowBase
+struct FAttributeMetaData : public FTableRowBase
 {
 	GENERATED_USTRUCT_BODY()
 
 public:
 
-	FAttributeMetaData();
+	UE_API FAttributeMetaData();
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Gameplay Attribute")
 	float		BaseValue;
@@ -334,7 +338,7 @@ public:
  *	-"Default" is currently the hardcoded, fallback GroupName. If InitAttributeSetDefaults is called without a valid GroupName, we will fallback to default.
  *
  */
-struct GAMEPLAYABILITIES_API FAttributeSetInitter
+struct FAttributeSetInitter
 {
 	virtual ~FAttributeSetInitter() {}
 
@@ -345,18 +349,16 @@ struct GAMEPLAYABILITIES_API FAttributeSetInitter
 };
 
 /** Explicit implementation of attribute set initter, relying on the existence and usage of discrete levels for data look-up (that is, CurveTable->Eval is not possible) */
-struct GAMEPLAYABILITIES_API FAttributeSetInitterDiscreteLevels : public FAttributeSetInitter
+struct FAttributeSetInitterDiscreteLevels : public FAttributeSetInitter
 {
-	virtual void PreloadAttributeSetData(const TArray<UCurveTable*>& CurveData) override;
+	UE_API virtual void PreloadAttributeSetData(const TArray<UCurveTable*>& CurveData) override;
 
-	virtual void InitAttributeSetDefaults(UAbilitySystemComponent* AbilitySystemComponent, FName GroupName, int32 Level, bool bInitialInit) const override;
-	virtual void ApplyAttributeDefault(UAbilitySystemComponent* AbilitySystemComponent, FGameplayAttribute& InAttribute, FName GroupName, int32 Level) const override;
+	UE_API virtual void InitAttributeSetDefaults(UAbilitySystemComponent* AbilitySystemComponent, FName GroupName, int32 Level, bool bInitialInit) const override;
+	UE_API virtual void ApplyAttributeDefault(UAbilitySystemComponent* AbilitySystemComponent, FGameplayAttribute& InAttribute, FName GroupName, int32 Level) const override;
 
-	virtual TArray<float> GetAttributeSetValues(UClass* AttributeSetClass, FProperty* AttributeProperty, FName GroupName) const override;
+	UE_API virtual TArray<float> GetAttributeSetValues(UClass* AttributeSetClass, FProperty* AttributeProperty, FName GroupName) const override;
+
 private:
-
-	bool IsSupportedProperty(FProperty* Property) const;
-
 	struct FAttributeDefaultValueList
 	{
 		void AddPair(FProperty* InProperty, float InValue)
@@ -406,7 +408,7 @@ private:
 
 /**
  * This defines a set of helper functions for accessing and initializing attributes, to avoid having to manually write these functions.
- * It would creates the following functions, for attribute Health
+ * It would create the following functions, for attribute Health
  *
  *	static FGameplayAttribute UMyHealthSet::GetHealthAttribute();
  *	FORCEINLINE float UMyHealthSet::GetHealth() const;
@@ -432,13 +434,13 @@ private:
 	}
 
 #define GAMEPLAYATTRIBUTE_VALUE_GETTER(PropertyName) \
-	FORCEINLINE float Get##PropertyName() const \
+	inline float Get##PropertyName() const \
 	{ \
 		return PropertyName.GetCurrentValue(); \
 	}
 
 #define GAMEPLAYATTRIBUTE_VALUE_SETTER(PropertyName) \
-	FORCEINLINE void Set##PropertyName(float NewVal) \
+	inline void Set##PropertyName(float NewVal) \
 	{ \
 		UAbilitySystemComponent* AbilityComp = GetOwningAbilitySystemComponent(); \
 		if (ensure(AbilityComp)) \
@@ -448,8 +450,23 @@ private:
 	}
 
 #define GAMEPLAYATTRIBUTE_VALUE_INITTER(PropertyName) \
-	FORCEINLINE void Init##PropertyName(float NewVal) \
+	inline void Init##PropertyName(float NewVal) \
 	{ \
 		PropertyName.SetBaseValue(NewVal); \
 		PropertyName.SetCurrentValue(NewVal); \
 	}
+
+/**
+ * Instead of copying the ATTRIBUTE_ACCESSORS macro from the comment above, you can also immediately 
+ * use this one if it fulfills your needs. Named differently to not cause name collision in existing 
+ * projects that have copied ATTRIBUTE_ACCESSORS already:
+ * 
+ *  ATTRIBUTE_ACCESSORS_BASIC(UMyHealthSet, Health)
+ */
+#define ATTRIBUTE_ACCESSORS_BASIC(ClassName, PropertyName) \
+	GAMEPLAYATTRIBUTE_PROPERTY_GETTER(ClassName, PropertyName) \
+	GAMEPLAYATTRIBUTE_VALUE_GETTER(PropertyName) \
+	GAMEPLAYATTRIBUTE_VALUE_SETTER(PropertyName) \
+	GAMEPLAYATTRIBUTE_VALUE_INITTER(PropertyName)
+
+#undef UE_API

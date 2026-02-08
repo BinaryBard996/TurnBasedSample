@@ -6,6 +6,8 @@
 #include "AbilitySystemStats.h"
 #include "Misc/DataValidation.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(ImmunityGameplayEffectComponent)
+
 #define LOCTEXT_NAMESPACE "ImmunityGameplayEffectComponent"
 
 UImmunityGameplayEffectComponent::UImmunityGameplayEffectComponent()

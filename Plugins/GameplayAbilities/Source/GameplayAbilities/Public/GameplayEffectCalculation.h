@@ -8,16 +8,18 @@
 #include "GameplayEffectTypes.h"
 #include "GameplayEffectCalculation.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 /** Abstract base for specialized gameplay effect calculations; Capable of specifing attribute captures */
-UCLASS(BlueprintType, Blueprintable, Abstract)
-class GAMEPLAYABILITIES_API UGameplayEffectCalculation : public UObject
+UCLASS(BlueprintType, Blueprintable, Abstract, MinimalAPI)
+class UGameplayEffectCalculation : public UObject
 {
 	GENERATED_UCLASS_BODY()
 
 public:
 
 	/** Simple accessor to capture definitions for attributes */
-	virtual const TArray<FGameplayEffectAttributeCaptureDefinition>& GetAttributeCaptureDefinitions() const;
+	UE_API virtual const TArray<FGameplayEffectAttributeCaptureDefinition>& GetAttributeCaptureDefinitions() const;
 
 protected:
 
@@ -25,3 +27,5 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category=Attributes)
 	TArray<FGameplayEffectAttributeCaptureDefinition> RelevantAttributesToCapture;
 };
+
+#undef UE_API

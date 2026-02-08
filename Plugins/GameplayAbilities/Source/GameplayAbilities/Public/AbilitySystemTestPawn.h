@@ -9,16 +9,18 @@
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemTestPawn.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
-UCLASS(Blueprintable, BlueprintType, notplaceable)
-class GAMEPLAYABILITIES_API AAbilitySystemTestPawn : public ADefaultPawn, public IGameplayCueInterface, public IAbilitySystemInterface
+UCLASS(Blueprintable, BlueprintType, notplaceable, MinimalAPI)
+class AAbilitySystemTestPawn : public ADefaultPawn, public IGameplayCueInterface, public IAbilitySystemInterface
 {
 	GENERATED_UCLASS_BODY()
 
-	virtual void PostInitializeComponents() override;
+	UE_API virtual void PostInitializeComponents() override;
 
-	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	UE_API virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	
 private:
 	/** DefaultPawn collision component */
@@ -29,8 +31,10 @@ public:
 	//UPROPERTY(EditDefaultsOnly, Category=GameplayEffects)
 	//UGameplayAbilitySet * DefaultAbilitySet;
 
-	static FName AbilitySystemComponentName;
+	static UE_API FName AbilitySystemComponentName;
 
 	/** Returns AbilitySystemComponent subobject **/
 	class UAbilitySystemComponent* GetAbilitySystemComponent() { return AbilitySystemComponent; }
 };
+
+#undef UE_API

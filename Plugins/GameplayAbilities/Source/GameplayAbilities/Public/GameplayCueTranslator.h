@@ -9,6 +9,8 @@
 #include "GameplayTagContainer.h"
 #include "GameplayCueTranslator.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class AActor;
 class UGameplayCueTranslator;
 class UGameplayTagsManager;
@@ -55,7 +57,7 @@ struct FGameplayCueParameters;
 //	Editor only. Data that is only used by the GameplayCue editor tool
 // -----------------------------------------------------------------------------
 #if WITH_EDITOR
-struct GAMEPLAYABILITIES_API FGameplayCueTranslationEditorOnlyData
+struct FGameplayCueTranslationEditorOnlyData
 {
 	FGameplayCueTranslationEditorOnlyData()
 		:UniqueID(0), Enabled(true)
@@ -68,7 +70,7 @@ struct GAMEPLAYABILITIES_API FGameplayCueTranslationEditorOnlyData
 	bool	Enabled;			// Is this actually enabled, or not (and if not, we may still want to draw it in the editor but greyed out). In non editor builds, the translator rule class should "just not return the rule" if its disanled.
 };
 
-struct GAMEPLAYABILITIES_API FGameplayCueTranslationEditorInfo
+struct FGameplayCueTranslationEditorInfo
 {
 	FGameplayTag GameplayTag;	// Will only exist if there is an existing FGameplayTag
 	FName	GameplayTagName;	// Will always exist, even if tag hasn't been created
@@ -84,7 +86,7 @@ struct GAMEPLAYABILITIES_API FGameplayCueTranslationEditorInfo
 class UGameplayCueTranslator;
 
 /** Basis for name swaps. This swaps FromName to ToName */
-struct GAMEPLAYABILITIES_API FGameplayCueTranslationNameSwap
+struct FGameplayCueTranslationNameSwap
 {
 	FName	FromName;
 	TArray<FName, TInlineAllocator<4> >	ToNames;
@@ -96,7 +98,7 @@ struct GAMEPLAYABILITIES_API FGameplayCueTranslationNameSwap
 
 /** Simple index/handle for referencing items in FGameplayCueTranslationManager::TranslationLUT  */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayCueTranslatorNodeIndex
+struct FGameplayCueTranslatorNodeIndex
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -109,12 +111,12 @@ struct GAMEPLAYABILITIES_API FGameplayCueTranslatorNodeIndex
 
 	bool IsValid() const { return Index != INDEX_NONE; }
 
-	FORCEINLINE operator int32() const
+	inline operator int32() const
 	{
 		return Index;
 	}
 
-	FORCEINLINE bool operator==(const FGameplayCueTranslatorNodeIndex& Other) const
+	inline bool operator==(const FGameplayCueTranslatorNodeIndex& Other) const
 	{
 		return Other.Index == Index;
 	}
@@ -177,38 +179,38 @@ struct FNameSwapData
 
 /** This is the struct that does the actual translation. It lives on the GameplayCueManager and encapsulates all translation logic. */
 USTRUCT()
-struct GAMEPLAYABILITIES_API FGameplayCueTranslationManager
+struct FGameplayCueTranslationManager
 {
 	GENERATED_USTRUCT_BODY()
 
 	/** This is *the* runtime function that translates the tag (if necessary) */
-	void TranslateTag(FGameplayTag& Tag, AActor* TargetActor, const FGameplayCueParameters& Parameters);
+	UE_API void TranslateTag(FGameplayTag& Tag, AActor* TargetActor, const FGameplayCueParameters& Parameters);
 
 	/** Builds all our translation tables. This works backwards by looking at the tags in the dictionary and determining which could be derived from translation rules. This is pretty fast. */
-	void BuildTagTranslationTable();
-	bool BuildTagTranslationTable_r(const FName& TagName, const TArray<FName>& SplitNames);
+	UE_API void BuildTagTranslationTable();
+	UE_API bool BuildTagTranslationTable_r(const FName& TagName, const TArray<FName>& SplitNames);
 
 	/** 
 	 *  Builds all *possible* translation tables. This works forwards by looking at existing tags and determining what translated tags could be dervied from them. 
 	 *	This WILL populate the TranslationLUT with all possible tags, not just ones that exist in the dictionar. This is not as fast and is onyl called in the editor. 
 	 */
-	void BuildTagTranslationTable_Forward();
-	void BuildTagTranslationTable_Forward_r(const FName& TagName, const TArray<FName>& SplitNames);
+	UE_API void BuildTagTranslationTable_Forward();
+	UE_API void BuildTagTranslationTable_Forward_r(const FName& TagName, const TArray<FName>& SplitNames);
 		
 	/** refresh our name swap rules. Called internally by the manager and externally by GC tool */
-	void RefreshNameSwaps();
+	UE_API void RefreshNameSwaps();
 
-	void PrintTranslationTable();
-	void PrintTranslationTable_r(FGameplayCueTranslatorNode& Node, FString IdentStr=FString());
+	UE_API void PrintTranslationTable();
+	UE_API void PrintTranslationTable_r(FGameplayCueTranslatorNode& Node, FString IdentStr=FString());
 
 	
 #if WITH_EDITOR
 	/** Used by the GC editor to enumerate possible translation tags. Never called at runtime. */
-	bool GetTranslatedTags(const FName& ParentTag, TArray<FGameplayCueTranslationEditorInfo>& Children);
+	UE_API bool GetTranslatedTags(const FName& ParentTag, TArray<FGameplayCueTranslationEditorInfo>& Children);
 	const TArray<FNameSwapData>& GetNameSwapData() const { return AllNameSwaps; }
 
 	/** Searches, slowly, to see if the passed in tag can be translated from something else. Don't call this at runtime. */
-	FGameplayTag SearchSlowForTranslationParent(FGameplayTag Tag);
+	UE_API FGameplayTag SearchSlowForTranslationParent(FGameplayTag Tag);
 #endif
 
 private:
@@ -228,16 +230,16 @@ private:
 	/** All name swpa rules we have gathered */
 	TArray<FNameSwapData> AllNameSwaps;
 
-	bool TranslateTag_Internal(FGameplayCueTranslatorNode& Node, FGameplayTag& OutTag, const FName& TagName, AActor* TargetActor, const FGameplayCueParameters& Parameters);
+	UE_API bool TranslateTag_Internal(FGameplayCueTranslatorNode& Node, FGameplayTag& OutTag, const FName& TagName, AActor* TargetActor, const FGameplayCueParameters& Parameters);
 
-	FGameplayCueTranslatorNodeIndex GetTranslationIndexForTag(const FGameplayTag& Tag, bool CreateIfInvalid=false);
+	UE_API FGameplayCueTranslatorNodeIndex GetTranslationIndexForTag(const FGameplayTag& Tag, bool CreateIfInvalid=false);
 
-	FGameplayCueTranslatorNode* GetTranslationNodeForTag(const FGameplayTag& Tag, bool CreateIfInvalid=false);
-	FGameplayCueTranslatorNode* GetTranslationNodeForName(FName Name, bool CreateIfInvalid=false);
+	UE_API FGameplayCueTranslatorNode* GetTranslationNodeForTag(const FGameplayTag& Tag, bool CreateIfInvalid=false);
+	UE_API FGameplayCueTranslatorNode* GetTranslationNodeForName(FName Name, bool CreateIfInvalid=false);
 
-	FGameplayCueTranslatorNodeIndex GetTranslationIndexForName(FName Name, bool CreateIfInvalid=false);
+	UE_API FGameplayCueTranslatorNodeIndex GetTranslationIndexForName(FName Name, bool CreateIfInvalid=false);
 
-	void ResetTranslationLUT();
+	UE_API void ResetTranslationLUT();
 
 	// Only used in debug printing/stats
 	int32 TotalNumTranslations;
@@ -255,8 +257,8 @@ private:
  *
  */
 
-UCLASS(Abstract)
-class GAMEPLAYABILITIES_API UGameplayCueTranslator: public UObject
+UCLASS(Abstract, MinimalAPI)
+class UGameplayCueTranslator: public UObject
 {
 	GENERATED_BODY()
 
@@ -368,3 +370,5 @@ public:
 
 	*/
 };
+
+#undef UE_API

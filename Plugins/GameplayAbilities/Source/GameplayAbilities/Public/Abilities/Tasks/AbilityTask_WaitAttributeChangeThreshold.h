@@ -8,6 +8,8 @@
 #include "Abilities/Tasks/AbilityTask_WaitAttributeChange.h"
 #include "AbilityTask_WaitAttributeChangeThreshold.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 struct FGameplayEffectModCallbackData;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FWaitAttributeChangeThresholdDelegate, bool, bMatchesComparison, float, CurrentValue);
@@ -15,21 +17,21 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FWaitAttributeChangeThresholdDelega
 /**
  *	Waits for an attribute to match a threshold
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitAttributeChangeThreshold : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitAttributeChangeThreshold : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
 	UPROPERTY(BlueprintAssignable)
 	FWaitAttributeChangeThresholdDelegate OnChange;
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
-	void OnAttributeChange(const FOnAttributeChangeData& CallbackData);
+	UE_API void OnAttributeChange(const FOnAttributeChangeData& CallbackData);
 
 	/** Wait on attribute change meeting a comparison threshold. */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitAttributeChangeThreshold* WaitForAttributeChangeThreshold(UGameplayAbility* OwningAbility, FGameplayAttribute Attribute, TEnumAsByte<EWaitAttributeChangeComparison::Type> ComparisonType, float ComparisonValue, bool bTriggerOnce, AActor* OptionalExternalOwner = nullptr);
+	static UE_API UAbilityTask_WaitAttributeChangeThreshold* WaitForAttributeChangeThreshold(UGameplayAbility* OwningAbility, FGameplayAttribute Attribute, TEnumAsByte<EWaitAttributeChangeComparison::Type> ComparisonType, float ComparisonValue, bool bTriggerOnce, AActor* OptionalExternalOwner = nullptr);
 
 	FGameplayAttribute Attribute;
 	TEnumAsByte<EWaitAttributeChangeComparison::Type> ComparisonType;
@@ -44,9 +46,11 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UAbilitySystemComponent> ExternalOwner;
 
-	UAbilitySystemComponent* GetFocusedASC();
+	UE_API UAbilitySystemComponent* GetFocusedASC();
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
-	bool DoesValuePassComparison(float Value) const;
+	UE_API bool DoesValuePassComparison(float Value) const;
 };
+
+#undef UE_API

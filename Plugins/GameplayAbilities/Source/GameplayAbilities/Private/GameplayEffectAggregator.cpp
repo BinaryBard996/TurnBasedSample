@@ -512,7 +512,7 @@ void FAggregator::UpdateAggregatorMod(FActiveGameplayEffectHandle ActiveHandle, 
 		if (ModDef.Attribute == Attribute)
 		{
 			FAggregatorModChannel& ModChannel = ModChannels.FindOrAddModChannel(ModDef.EvaluationChannelSettings.GetEvaluationChannel());
-			ModChannel.AddMod(Spec.GetModifierMagnitude(ModIdx, true), ModDef.ModifierOp, &ModDef.SourceTags, &ModDef.TargetTags, bWasLocallyGenerated, InHandle);
+			ModChannel.AddMod(Spec.GetModifierMagnitude(ModIdx), ModDef.ModifierOp, &ModDef.SourceTags, &ModDef.TargetTags, bWasLocallyGenerated, InHandle);
 		}
 	}
 

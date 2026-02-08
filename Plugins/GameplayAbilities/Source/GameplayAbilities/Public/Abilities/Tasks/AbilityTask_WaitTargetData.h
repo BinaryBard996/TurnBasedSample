@@ -9,6 +9,8 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitTargetData.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWaitTargetDataDelegate, const FGameplayAbilityTargetDataHandle&, Data);
 
 /**
@@ -18,8 +20,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWaitTargetDataDelegate, const FGame
  * For most games you will need to subclass and heavily modify this actor, or you will want to implement similar functions in a game-specific actor or blueprint to avoid actor spawn costs
  * This task is not well tested by internal games, but it is a useful class to look at to learn how target replication occurs
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitTargetData: public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitTargetData: public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -30,50 +32,50 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitTargetData: public UAbilityTask
 	FWaitTargetDataDelegate	Cancelled;
 
 	UFUNCTION()
-	virtual void OnTargetDataReplicatedCallback(const FGameplayAbilityTargetDataHandle& Data, FGameplayTag ActivationTag);
+	UE_API virtual void OnTargetDataReplicatedCallback(const FGameplayAbilityTargetDataHandle& Data, FGameplayTag ActivationTag);
 
 	UFUNCTION()
-	virtual void OnTargetDataReplicatedCancelledCallback();
+	UE_API virtual void OnTargetDataReplicatedCancelledCallback();
 
 	UFUNCTION()
-	virtual void OnTargetDataReadyCallback(const FGameplayAbilityTargetDataHandle& Data);
+	UE_API virtual void OnTargetDataReadyCallback(const FGameplayAbilityTargetDataHandle& Data);
 
 	UFUNCTION()
-	virtual void OnTargetDataCancelledCallback(const FGameplayAbilityTargetDataHandle& Data);
+	UE_API virtual void OnTargetDataCancelledCallback(const FGameplayAbilityTargetDataHandle& Data);
 
 	/** Spawns target actor and waits for it to return valid data or to be canceled. */
 	UFUNCTION(BlueprintCallable, meta=(HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true", HideSpawnParms="Instigator"), Category="Ability|Tasks")
-	static UAbilityTask_WaitTargetData* WaitTargetData(UGameplayAbility* OwningAbility, FName TaskInstanceName, TEnumAsByte<EGameplayTargetingConfirmation::Type> ConfirmationType, TSubclassOf<AGameplayAbilityTargetActor> Class);
+	static UE_API UAbilityTask_WaitTargetData* WaitTargetData(UGameplayAbility* OwningAbility, FName TaskInstanceName, TEnumAsByte<EGameplayTargetingConfirmation::Type> ConfirmationType, TSubclassOf<AGameplayAbilityTargetActor> Class);
 
 	/** Uses specified target actor and waits for it to return valid data or to be canceled. */
 	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true", HideSpawnParms = "Instigator"), Category = "Ability|Tasks")
-	static UAbilityTask_WaitTargetData* WaitTargetDataUsingActor(UGameplayAbility* OwningAbility, FName TaskInstanceName, TEnumAsByte<EGameplayTargetingConfirmation::Type> ConfirmationType, AGameplayAbilityTargetActor* TargetActor);
+	static UE_API UAbilityTask_WaitTargetData* WaitTargetDataUsingActor(UGameplayAbility* OwningAbility, FName TaskInstanceName, TEnumAsByte<EGameplayTargetingConfirmation::Type> ConfirmationType, AGameplayAbilityTargetActor* TargetActor);
 
-	virtual void Activate() override;
-
-	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
-	virtual bool BeginSpawningActor(UGameplayAbility* OwningAbility, TSubclassOf<AGameplayAbilityTargetActor> Class, AGameplayAbilityTargetActor*& SpawnedActor);
+	UE_API virtual void Activate() override;
 
 	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
-	virtual void FinishSpawningActor(UGameplayAbility* OwningAbility, AGameplayAbilityTargetActor* SpawnedActor);
+	UE_API virtual bool BeginSpawningActor(UGameplayAbility* OwningAbility, TSubclassOf<AGameplayAbilityTargetActor> Class, AGameplayAbilityTargetActor*& SpawnedActor);
+
+	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
+	UE_API virtual void FinishSpawningActor(UGameplayAbility* OwningAbility, AGameplayAbilityTargetActor* SpawnedActor);
 
 	/** Called when the ability is asked to confirm from an outside node. What this means depends on the individual task. By default, this does nothing other than ending if bEndTask is true. */
-	virtual void ExternalConfirm(bool bEndTask) override;
+	UE_API virtual void ExternalConfirm(bool bEndTask) override;
 
 	/** Called when the ability is asked to cancel from an outside node. What this means depends on the individual task. By default, this does nothing other than ending the task. */
-	virtual void ExternalCancel() override;
+	UE_API virtual void ExternalCancel() override;
 
 protected:
 
-	virtual bool ShouldSpawnTargetActor() const;
-	virtual void InitializeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
-	virtual void FinalizeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
+	UE_API virtual bool ShouldSpawnTargetActor() const;
+	UE_API virtual void InitializeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
+	UE_API virtual void FinalizeTargetActor(AGameplayAbilityTargetActor* SpawnedActor) const;
 
-	virtual void RegisterTargetDataCallbacks();
+	UE_API virtual void RegisterTargetDataCallbacks();
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
-	virtual bool ShouldReplicateDataToServer() const;
+	UE_API virtual bool ShouldReplicateDataToServer() const;
 
 protected:
 
@@ -98,3 +100,5 @@ protected:
 *		-Have a function named FinishSpawningActor w/ an AActor* of the class you spawned
 *			-This function *must* call ExecuteConstruction + PostActorConstruction
 */
+
+#undef UE_API

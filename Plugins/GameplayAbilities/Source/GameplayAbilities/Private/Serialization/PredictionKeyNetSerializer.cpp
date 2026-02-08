@@ -4,7 +4,6 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(PredictionKeyNetSerializer)
 
-#if UE_WITH_IRIS
 
 #include "GameplayPrediction.h"
 #include "Engine/NetConnection.h"
@@ -206,4 +205,3 @@ void FPredictionKeyNetSerializer::FNetSerializerRegistryDelegates::OnPreFreezeNe
 
 }
 
-#endif // UE_WITH_IRIS

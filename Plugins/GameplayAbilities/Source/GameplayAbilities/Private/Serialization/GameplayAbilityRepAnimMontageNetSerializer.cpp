@@ -4,7 +4,6 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayAbilityRepAnimMontageNetSerializer)
 
-#if UE_WITH_IRIS
 
 #include "Animation/AnimSequenceBase.h"
 #include "Animation/AnimMontage.h"
@@ -44,7 +43,7 @@ struct FGameplayAbilityRepAnimMontageNetSerializer
 
 	struct FQuantizedType
 	{
-		alignas(16) uint8 GameplayAbilityRepAnimMontage[80];
+		alignas(16) uint8 GameplayAbilityRepAnimMontage[84];
 
 		float Position;
 		float BlendOutTime;
@@ -583,5 +582,4 @@ void FGameplayAbilityRepAnimMontageNetSerializer::FNetSerializerRegistryDelegate
 
 }
 
-#endif // UE_WITH_IRIS
 

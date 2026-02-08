@@ -16,9 +16,7 @@
 #include "Net/Core/PushModel/PushModel.h"
 #include "UObject/UObjectThreadContext.h"
 
-#if UE_WITH_IRIS
 #include "Iris/ReplicationSystem/ReplicationFragmentUtil.h"
-#endif // UE_WITH_IRIS
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AttributeSet)
 
@@ -54,23 +52,20 @@ void FGameplayAttributeData::SetBaseValue(float NewValue)
 
 FGameplayAttribute::FGameplayAttribute(FProperty *NewProperty)
 {
-	// we allow numeric properties and gameplay attribute data properties for now
-	// @todo deprecate numeric properties
-	Attribute = CastField<FNumericProperty>(NewProperty);
-	AttributeOwner = nullptr;
-
-	if (!Attribute.Get())
+	if (FGameplayAttribute::IsSupportedProperty(NewProperty))
 	{
-		if (IsGameplayAttributeDataProperty(NewProperty))
-		{
-			Attribute = NewProperty;
-		}
+		Attribute = NewProperty;
+		AttributeOwner = Attribute->GetOwnerStruct();
+		Attribute->GetName(AttributeName);
 	}
-
-	if (Attribute.Get())
+	else
 	{
- 		AttributeOwner = Attribute->GetOwnerStruct();
- 		Attribute->GetName(AttributeName);
+		// Non-null property passed in that's incompatible.
+		ensureMsgf(!NewProperty, TEXT("Tried to construct FGameplayAttribute with invalid property '%s' of type '%s'. Treating as invalid attribute."), *NewProperty->GetName(), *NewProperty->GetClass()->GetName());
+
+		Attribute = nullptr;
+		AttributeOwner = nullptr;
+		AttributeName = "";
 	}
 }
 
@@ -99,7 +94,7 @@ void FGameplayAttribute::SetNumericValueChecked(float& NewValue, class UAttribut
 		OldValue = DataPtr->GetCurrentValue();
 		Dest->PreAttributeChange(*this, NewValue);
 		DataPtr->SetCurrentValue(NewValue);
-		Dest->PostAttributeChange(*this, OldValue, NewValue);
+		Dest->PostAttributeChange(*this, OldValue, DataPtr->GetCurrentValue());
 
 		MARK_PROPERTY_DIRTY(Dest, StructProperty);
 	}
@@ -225,6 +220,13 @@ bool FGameplayAttribute::IsSystemAttribute() const
 	return GetAttributeSetClass()->IsChildOf(UAbilitySystemComponent::StaticClass());
 }
 
+bool FGameplayAttribute::IsSupportedProperty(const FProperty* Property)
+{
+	// FGameplayAttributeData is preferred. Floating point properties are supported for legacy reasons.
+	// @todo: Deprecate numeric properties and only allow FGameplayAttributeData.
+	return Property && (FGameplayAttribute::IsGameplayAttributeDataProperty(Property) || (Property->IsA<FNumericProperty>() && CastField<FNumericProperty>(Property)->IsFloatingPoint()));
+}
+
 bool FGameplayAttribute::IsGameplayAttributeDataProperty(const FProperty* Property)
 {
 	const FStructProperty* StructProp = CastField<FStructProperty>(Property);
@@ -278,12 +280,15 @@ void FGameplayAttribute::PostSerialize(const FArchive& Ar)
 			AttributeOwner = Attribute->GetOwnerStruct();
 			Attribute->GetName(AttributeName);
 		}
-		else if (!AttributeName.IsEmpty() && AttributeOwner != nullptr)
+		else if (!AttributeName.IsEmpty())
 		{
-			// Attempt to resolve field path from owner and attribute name
-			Attribute = FindFProperty<FProperty>(AttributeOwner, *AttributeName);
+			if (AttributeOwner != nullptr)
+			{
+				// Attempt to resolve field path from owner and attribute name
+				Attribute = FindFProperty<FProperty>(AttributeOwner, *AttributeName);
+			}
 
-			// Log warning if attribute failed to resolve while name + owner were non-null
+			// Log warning if attribute failed to resolve
 			if (!Attribute.Get())
 			{
 				FUObjectSerializeContext* LoadContext = FUObjectThreadContext::Get().GetSerializeContext();
@@ -408,11 +413,7 @@ void UAttributeSet::GetAttributesFromSetClass(const TSubclassOf<UAttributeSet>& 
 {
 	for (TFieldIterator<FProperty> It(AttributeSetClass); It; ++It)
 	{
-		if (FFloatProperty* FloatProperty = CastField<FFloatProperty>(*It))
-		{
-			Attributes.Add(FGameplayAttribute(FloatProperty));
-		}
-		else if (FGameplayAttribute::IsGameplayAttributeDataProperty(*It))
+		if (FGameplayAttribute::IsSupportedProperty(*It))
 		{
 			Attributes.Add(FGameplayAttribute(*It));
 		}
@@ -424,7 +425,6 @@ void UAttributeSet::SetNetAddressable()
 	bNetAddressable = true;
 }
 
-#if UE_WITH_IRIS
 void UAttributeSet::RegisterReplicationFragments(UE::Net::FFragmentRegistrationContext& Context, UE::Net::EFragmentRegistrationFlags RegistrationFlags)
 {
 	using namespace UE::Net;
@@ -432,7 +432,6 @@ void UAttributeSet::RegisterReplicationFragments(UE::Net::FFragmentRegistrationC
 	// Build descriptors and allocate PropertyReplicationFragments for this object
 	FReplicationFragmentUtil::CreateAndRegisterFragmentsForObject(this, Context, RegistrationFlags);
 }
-#endif // UE_WITH_IRIS
 
 void UAttributeSet::InitFromMetaDataTable(const UDataTable* DataTable)
 {
@@ -441,32 +440,33 @@ void UAttributeSet::InitFromMetaDataTable(const UDataTable* DataTable)
 	for( TFieldIterator<FProperty> It(GetClass(), EFieldIteratorFlags::IncludeSuper) ; It ; ++It )
 	{
 		FProperty* Property = *It;
-		FNumericProperty *NumericProperty = CastField<FNumericProperty>(Property);
-		if (NumericProperty)
-		{
-			FString RowNameStr = FString::Printf(TEXT("%s.%s"), *Property->GetOwnerVariant().GetName(), *Property->GetName());
-		
-			FAttributeMetaData * MetaData = DataTable->FindRow<FAttributeMetaData>(FName(*RowNameStr), Context, false);
-			if (MetaData)
-			{
-				void *Data = NumericProperty->ContainerPtrToValuePtr<void>(this);
-				NumericProperty->SetFloatingPointPropertyValue(Data, MetaData->BaseValue);
-			}
-		}
-		else if (FGameplayAttribute::IsGameplayAttributeDataProperty(Property))
-		{
-			FString RowNameStr = FString::Printf(TEXT("%s.%s"), *Property->GetOwnerVariant().GetName(), *Property->GetName());
 
-			FAttributeMetaData * MetaData = DataTable->FindRow<FAttributeMetaData>(FName(*RowNameStr), Context, false);
-			if (MetaData)
+		// Only process properties that can back gameplay attributes. They will be either FGameplayAttributeData 
+		// or a floating-point numeric property (floats, doubles, potentially user custom).
+		if (FGameplayAttribute::IsSupportedProperty(Property))
+		{
+			FString RowNameStr = FString::Printf(TEXT("%s.%s"), *Property->GetOwnerVariant().GetName(), *Property->GetName());
+			if (FAttributeMetaData* MetaData = DataTable->FindRow<FAttributeMetaData>(FName(*RowNameStr), Context, false))
 			{
-				FStructProperty* StructProperty = CastField<FStructProperty>(Property);
-				check(StructProperty);
-				FGameplayAttributeData* DataPtr = StructProperty->ContainerPtrToValuePtr<FGameplayAttributeData>(this);
-				check(DataPtr);
-				DataPtr->SetBaseValue(MetaData->BaseValue);
-				DataPtr->SetCurrentValue(MetaData->BaseValue);
+				FNumericProperty* NumericProperty = CastField<FNumericProperty>(Property);
+				if (NumericProperty)
+				{
+					// Passing FGameplayAttribute::IsSupportedProperty() as numeric property already implies it's floating point
+					check(NumericProperty->IsFloatingPoint());
+					void* Data = NumericProperty->ContainerPtrToValuePtr<void>(this);
+					NumericProperty->SetFloatingPointPropertyValue(Data, MetaData->BaseValue);
+				}
+				else if (FGameplayAttribute::IsGameplayAttributeDataProperty(Property))
+				{
+					FStructProperty* StructProperty = CastField<FStructProperty>(Property);
+					check(StructProperty);
+					FGameplayAttributeData* DataPtr = StructProperty->ContainerPtrToValuePtr<FGameplayAttributeData>(this);
+					check(DataPtr);
+					DataPtr->SetBaseValue(MetaData->BaseValue);
+					DataPtr->SetCurrentValue(MetaData->BaseValue);
+				}
 			}
+			
 		}
 	}
 
@@ -617,9 +617,14 @@ void FAttributeSetInitterDiscreteLevels::PreloadAttributeSetData(const TArray<UC
 
 			// Find the FProperty
 			FProperty* Property = FindFProperty<FProperty>(*Set, *AttributeName);
-			if (!IsSupportedProperty(Property))
+			if (!Property)
 			{
-				ABILITY_LOG(Verbose, TEXT("FAttributeSetInitterDiscreteLevels::PreloadAttributeSetData Unable to match Attribute from %s (row: %s)"), *AttributeName, *RowName);
+				ABILITY_LOG(Verbose, TEXT("FAttributeSetInitterDiscreteLevels::PreloadAttributeSetData Unable to match Attribute from %s (row: %s): Property not found"), *AttributeName, *RowName);
+				continue;
+			}
+			else if (!FGameplayAttribute::IsSupportedProperty(Property))
+			{
+				ABILITY_LOG(Verbose, TEXT("FAttributeSetInitterDiscreteLevels::PreloadAttributeSetData Unable to match Attribute from %s (row: %s): Property type '%s' incompatible. Must be FGameplayAttributeData or a floating point type."), *AttributeName, *RowName, *Property->GetClass()->GetName());
 				continue;
 			}
 
@@ -797,10 +802,3 @@ TArray<float> FAttributeSetInitterDiscreteLevels::GetAttributeSetValues(UClass* 
 	}
 	return AttributeSetValues;
 }
-
-
-bool FAttributeSetInitterDiscreteLevels::IsSupportedProperty(FProperty* Property) const
-{
-	return (Property && (CastField<FNumericProperty>(Property) || FGameplayAttribute::IsGameplayAttributeDataProperty(Property)));
-}
-

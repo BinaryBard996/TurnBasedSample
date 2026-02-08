@@ -5,6 +5,8 @@
 #include "AbilitySystemGlobals.h"
 #include "AbilitySystemLog.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(AbilityTask_WaitGameplayTagCountChanged)
+
 UAbilityTask_WaitGameplayTagCountChanged* UAbilityTask_WaitGameplayTagCountChanged::WaitGameplayTagCountChange(UGameplayAbility* OwningAbility, FGameplayTag Tag, AActor* InOptionalExternalTarget /*= nullptr*/)
 {
 	UAbilityTask_WaitGameplayTagCountChanged* MyObj = NewAbilityTask<UAbilityTask_WaitGameplayTagCountChanged>(OwningAbility);

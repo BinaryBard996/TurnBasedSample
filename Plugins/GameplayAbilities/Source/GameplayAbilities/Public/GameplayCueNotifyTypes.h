@@ -9,6 +9,8 @@
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "GameplayCueNotifyTypes.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 
 class UNiagaraSystem;
 class UFXSystemComponent;
@@ -33,6 +35,29 @@ static_assert((EPhysicalSurface::SurfaceType_Max <= (sizeof(FGameplayCueNotify_S
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGameplayCueNotify, Log, All);
 
+/*
+ * The Gameplay Cue Notify structs below cannot be inherited, but they are now exposed and can be aggregated.
+ * If you want to extend functionality in your own structs you can include the base struct in your own and use it in
+ * your own Notify Cue objects. EX
+ *
+
+USTRUCT(BlueprintType)
+struct FMyGameplayCueNotify_CustomBurstEffects
+{
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify)
+	FGameplayCueNotify_BurstEffects BaseBurstEffects;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify)
+	float CustomFloat;
+
+	void CustomExecute()
+	{
+		BaseBurstEffects.ExecuteEffects();
+	}
+};
+
+ *
+ **/
 
 /**
  * EGameplayCueNotify_EffectPlaySpace
@@ -91,17 +116,13 @@ enum class EGameplayCueNotify_LocallyControlledPolicy : uint8
  *	Conditions used to determine if the gameplay cue notify should spawn.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_SpawnCondition
+struct FGameplayCueNotify_SpawnCondition final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_SpawnCondition();
 
-	FGameplayCueNotify_SpawnCondition();
-
-	bool ShouldSpawn(const FGameplayCueNotify_SpawnContext& SpawnContext) const;
-
-public:
+	GAMEPLAYABILITIES_API bool ShouldSpawn(const FGameplayCueNotify_SpawnContext& SpawnContext) const;
 
 	// Source actor to use when determining if it is locally controlled.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify)
@@ -151,20 +172,16 @@ enum class EGameplayCueNotify_AttachPolicy : uint8
  *	Specifies how the gameplay cue notify will be positioned in the world.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_PlacementInfo
+struct FGameplayCueNotify_PlacementInfo final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_PlacementInfo();
 
-	FGameplayCueNotify_PlacementInfo();
+	GAMEPLAYABILITIES_API bool FindSpawnTransform(const FGameplayCueNotify_SpawnContext& SpawnContext, FTransform& OutTransform) const;
 
-	bool FindSpawnTransform(const FGameplayCueNotify_SpawnContext& SpawnContext, FTransform& OutTransform) const;
-
-	void SetComponentTransform(USceneComponent* Component, const FTransform& Transform) const;
-	void TryComponentAttachment(USceneComponent* Component, USceneComponent* AttachComponent) const;
-
-public:
+	GAMEPLAYABILITIES_API void SetComponentTransform(USceneComponent* Component, const FTransform& Transform) const;
+	GAMEPLAYABILITIES_API void TryComponentAttachment(USceneComponent* Component, USceneComponent* AttachComponent) const;
 
 	// Target's socket (or bone) used for location and rotation.  If "None", it uses the target's root.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify)
@@ -203,11 +220,11 @@ public:
  *
  *	Temporary spawn information collected from input parameters.
  */
-struct FGameplayCueNotify_SpawnContext
+struct FGameplayCueNotify_SpawnContext final
 {
 public:
 
-	FGameplayCueNotify_SpawnContext(UWorld* InWorld, AActor* InTargetActor, const FGameplayCueParameters& InCueParameters);
+	GAMEPLAYABILITIES_API FGameplayCueNotify_SpawnContext(UWorld* InWorld, AActor* InTargetActor, const FGameplayCueParameters& InCueParameters);
 
 	void SetDefaultSpawnCondition(const FGameplayCueNotify_SpawnCondition* InSpawnCondition) {DefaultSpawnCondition = InSpawnCondition;}
 	void SetDefaultPlacementInfo(const FGameplayCueNotify_PlacementInfo* InPlacementInfo) {DefaultPlacementInfo = InPlacementInfo;}
@@ -222,7 +239,7 @@ public:
 		return (!bUseOverride && DefaultSpawnCondition) ? *DefaultSpawnCondition : SpawnConditionOverride;
 	}
 
-	APlayerController* FindLocalPlayerController(EGameplayCueNotify_LocallyControlledSource Source) const;
+	GAMEPLAYABILITIES_API APlayerController* FindLocalPlayerController(EGameplayCueNotify_LocallyControlledSource Source) const;
 
 protected:
 
@@ -250,26 +267,13 @@ private:
  *	Temporary structure used to track results of spawning components.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_SpawnResult
+struct FGameplayCueNotify_SpawnResult final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_SpawnResult();
 
-	FGameplayCueNotify_SpawnResult() { Reset(); }
-
-	void Reset()
-	{
-		FxSystemComponents.Reset();
-		AudioComponents.Reset();
-		CameraShakes.Reset();
-		CameraLensEffects.Reset();
-		ForceFeedbackComponent = nullptr;
-		ForceFeedbackTargetPC = nullptr;
-		DecalComponent = nullptr;
-	}
-
-public:
+	GAMEPLAYABILITIES_API void Reset();
 
 	// List of FX components spawned.  There may be null pointers here as it matches the defined order.
 	UPROPERTY(BlueprintReadOnly, Transient, Category = GameplayCueNotify)
@@ -307,19 +311,16 @@ public:
  *	Properties that specify how to play a particle effect.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_ParticleInfo
+struct FGameplayCueNotify_ParticleInfo final
 {
 	GENERATED_BODY()
+	
+	GAMEPLAYABILITIES_API FGameplayCueNotify_ParticleInfo();
 
-public:
+	GAMEPLAYABILITIES_API bool PlayParticleEffect(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& 
+	OutSpawnResult) const;
 
-	FGameplayCueNotify_ParticleInfo();
-
-	bool PlayParticleEffect(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
-
-	void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
-
-public:
+	GAMEPLAYABILITIES_API void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
 
 	// Condition to check before spawning the particle system.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify, Meta = (EditCondition = "bOverrideSpawnCondition"))
@@ -352,13 +353,13 @@ public:
  *	Properties that specify how to interface with the ISoundParameterControllerInterface
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_SoundParameterInterfaceInfo
+struct FGameplayCueNotify_SoundParameterInterfaceInfo final
 {
 	GENERATED_BODY()
 
 public:
 
-	FGameplayCueNotify_SoundParameterInterfaceInfo();
+	GAMEPLAYABILITIES_API FGameplayCueNotify_SoundParameterInterfaceInfo();
 
 	// The name of the stop trigger set via the parameter interface
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify)
@@ -371,19 +372,16 @@ public:
  *	Properties that specify how to play a sound effect.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_SoundInfo
+struct FGameplayCueNotify_SoundInfo final
 {
 	GENERATED_BODY()
+	
+	GAMEPLAYABILITIES_API FGameplayCueNotify_SoundInfo();
 
-public:
+	GAMEPLAYABILITIES_API bool PlaySound(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) 
+	const;
 
-	FGameplayCueNotify_SoundInfo();
-
-	bool PlaySound(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
-
-	void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
-
-public:
+	GAMEPLAYABILITIES_API void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
 
 	// Condition to check before playing the sound.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify, Meta = (EditCondition = "bOverrideSpawnCondition"))
@@ -435,19 +433,16 @@ public:
  *	Properties that specify how to play a camera shake.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_CameraShakeInfo
+struct FGameplayCueNotify_CameraShakeInfo final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_CameraShakeInfo();
 
-	FGameplayCueNotify_CameraShakeInfo();
+	GAMEPLAYABILITIES_API bool PlayCameraShake(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& 
+	OutSpawnResult) const;
 
-	bool PlayCameraShake(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
-
-	void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
-
-public:
+	GAMEPLAYABILITIES_API void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
 
 	// Condition to check before playing the camera shake.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify, Meta = (EditCondition = "bOverrideSpawnCondition"))
@@ -501,19 +496,16 @@ public:
  *	Properties that specify how to play a camera lens effect.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_CameraLensEffectInfo
+struct FGameplayCueNotify_CameraLensEffectInfo final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_CameraLensEffectInfo();
 
-	FGameplayCueNotify_CameraLensEffectInfo();
+	GAMEPLAYABILITIES_API bool PlayCameraLensEffect(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& 
+	OutSpawnResult) const;
 
-	bool PlayCameraLensEffect(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
-
-	void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
-
-public:
+	GAMEPLAYABILITIES_API void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
 
 	// Condition to check before playing the camera lens effect.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify, Meta = (EditCondition = "bOverrideSpawnCondition"))
@@ -555,19 +547,16 @@ public:
  *	Properties that specify how to play a force feedback effect.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_ForceFeedbackInfo
+struct FGameplayCueNotify_ForceFeedbackInfo final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_ForceFeedbackInfo();
 
-	FGameplayCueNotify_ForceFeedbackInfo();
-
-	bool PlayForceFeedback(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
+	GAMEPLAYABILITIES_API bool PlayForceFeedback(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& 
+	OutSpawnResult) const;
 	
-	void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
-
-public:
+	GAMEPLAYABILITIES_API void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
 
 	// Condition to check before playing the force feedback.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify, Meta = (EditCondition = "bOverrideSpawnCondition"))
@@ -618,15 +607,18 @@ public:
  * Properties that specify how to set input device properties during a gameplay cue notify
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_InputDevicePropertyInfo
+struct FGameplayCueNotify_InputDevicePropertyInfo final
 {
 	GENERATED_BODY()
+	
+	FGameplayCueNotify_InputDevicePropertyInfo() = default;
 
 	/** Set the device properties on specified on this struct on the Input Device Subsystem. */
-	bool SetDeviceProperties(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
+	GAMEPLAYABILITIES_API bool SetDeviceProperties(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& 
+	OutSpawnResult) const;
 
 	/** Validate that the device properties in this effect are usable */
-	void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
+	GAMEPLAYABILITIES_API void ValidateBurstAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
 	
 	/** Input Device properties to apply */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = GameplayCueNotify)
@@ -639,17 +631,14 @@ struct FGameplayCueNotify_InputDevicePropertyInfo
  *	Properties that specify how to spawn a decal.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_DecalInfo
+struct FGameplayCueNotify_DecalInfo final
 {
 	GENERATED_BODY()
 
-public:
-	
-	FGameplayCueNotify_DecalInfo();
+	GAMEPLAYABILITIES_API FGameplayCueNotify_DecalInfo();
 
-	bool SpawnDecal(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
-
-public:
+	GAMEPLAYABILITIES_API bool SpawnDecal(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) 
+	const;
 
 	// Condition to check before spawning the decal.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = GameplayCueNotify, Meta = (EditCondition = "bOverrideSpawnCondition"))
@@ -695,18 +684,16 @@ public:
  *	Set of effects to spawn for a single event, used by all gameplay cue notify types.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_BurstEffects
+struct FGameplayCueNotify_BurstEffects final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_BurstEffects();
 
-	FGameplayCueNotify_BurstEffects();
+	GAMEPLAYABILITIES_API void ExecuteEffects(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
 
-	void ExecuteEffects(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
-
-	void ValidateAssociatedAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
-
+	GAMEPLAYABILITIES_API void ValidateAssociatedAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
+	
 protected:
 
 	// Particle systems to be spawned on gameplay cue execution.  These should never use looping effects!
@@ -745,18 +732,17 @@ protected:
  *	Set of looping effects to spawn for looping gameplay cues.
  */
 USTRUCT(BlueprintType)
-struct FGameplayCueNotify_LoopingEffects
+struct FGameplayCueNotify_LoopingEffects final
 {
 	GENERATED_BODY()
 
-public:
+	GAMEPLAYABILITIES_API FGameplayCueNotify_LoopingEffects();
 
-	FGameplayCueNotify_LoopingEffects();
-
-	void StartEffects(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& OutSpawnResult) const;
-	void StopEffects(FGameplayCueNotify_SpawnResult& SpawnResult) const;
+	GAMEPLAYABILITIES_API void StartEffects(const FGameplayCueNotify_SpawnContext& SpawnContext, FGameplayCueNotify_SpawnResult& 
+	OutSpawnResult) const;
+	GAMEPLAYABILITIES_API void StopEffects(FGameplayCueNotify_SpawnResult& SpawnResult) const;
 	
-	void ValidateAssociatedAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
+	GAMEPLAYABILITIES_API void ValidateAssociatedAssets(const UObject* ContainingAsset, const FString& Context, class FDataValidationContext& ValidationContext) const;
 
 protected:
 
@@ -784,3 +770,5 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = GameplayCueNotify)
 	FGameplayCueNotify_InputDevicePropertyInfo LoopingInputDevicePropertyEffect;
 };
+
+#undef UE_API

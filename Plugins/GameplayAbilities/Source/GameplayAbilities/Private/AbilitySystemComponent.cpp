@@ -2,7 +2,6 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemLog.h"
-#include "UObject/UObjectHash.h"
 #include "UObject/UObjectIterator.h"
 #include "Engine/Canvas.h"
 #include "DisplayDebugHelpers.h"
@@ -19,6 +18,7 @@
 #include "TimerManager.h"
 #include "Net/Core/PushModel/PushModel.h"
 #include "HAL/IConsoleManager.h"
+#include "Iris/IrisConfig.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AbilitySystemComponent)
 
@@ -45,6 +45,8 @@ static FAutoConsoleVariableRef CVarReplicateGameplayAbilitiesToOwnerOnly(TEXT("A
 
 static bool bForceReplicationAlsoUpdatesReplicatedProxyInterface = true;
 static FAutoConsoleVariableRef CVarForceReplicationAlsoUpdatesReplicatedProxyInterface(TEXT("AbilitySystem.Fix.ForceReplicationAlsoUpdatesReplicatedProxyInterface"), bForceReplicationAlsoUpdatesReplicatedProxyInterface, TEXT("Default: True.  When true, Calling ForceReplication() on the AbilitySystemComponent will also call ForceReplication() on the ReplicationProxy to ensure prompt replication of Cues and Tags"));
+
+extern TAutoConsoleVariable<bool> CVarReplicateTagCountContainerWithIris;
 
 UAbilitySystemComponent::UAbilitySystemComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -214,12 +216,11 @@ void UAbilitySystemComponent::OnRegister()
 	UpdateActiveGameplayEffectsReplicationCondition();
 	UpdateMinimalReplicationGameplayCuesCondition();
 
+	GameplayTagCountContainer.SetOwner(this);
 PRAGMA_DISABLE_DEPRECATION_WARNINGS
-	// This field is not replicated (MinimalReplicationTags has a custom serializer),
-	// so we don't need to mark it dirty.
 	MinimalReplicationTags.Owner = this;
-PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	ReplicatedLooseTags.Owner = this;
+PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 	/** Allocate an AbilityActorInfo. Note: this goes through a global function and is a SharedPtr so projects can make their own AbilityActorInfo */
 	if(!AbilityActorInfo.IsValid())
@@ -638,15 +639,114 @@ FOnGivenActiveGameplayEffectRemoved& UAbilitySystemComponent::OnAnyGameplayEffec
 	return ActiveGameplayEffects.OnActiveGameplayEffectRemovedDelegate;
 }
 
-void UAbilitySystemComponent::UpdateTagMap_Internal(const FGameplayTagContainer& Container, const int32 CountDelta)
+void UAbilitySystemComponent::UpdateTagMapSingle_Internal(const FGameplayTag& Tag, const int32 CountDelta, EGameplayTagReplicationState TagRepState)
 {
+	if (UE::Net::ShouldUseIrisReplication() && !CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread())
+	{
+		// Iris replication doesn't work the same so we're falling back to using the Minimal and replicated loose tags until it's fixed.
+		const UWorld* World = GetWorld();
+		ENetMode NetMode = World ? World->GetNetMode() : NM_Standalone;
+		if (NetMode == NM_DedicatedServer || NetMode == NM_ListenServer)
+		{
+			if (TagRepState == EGameplayTagReplicationState::TagOnly)
+			{
+				int32& TagCount = GetMinimalReplicationTags_Mutable().TagMap.FindOrAdd(Tag);
+				GetMinimalReplicationTags_Mutable().SetTagCount(Tag, FMath::Max(0, TagCount + CountDelta));
+			}
+			else if (TagRepState > EGameplayTagReplicationState::TagOnly)
+			{
+				int32& TagCount = GetReplicatedLooseTags_Mutable().TagMap.FindOrAdd(Tag);
+				GetReplicatedLooseTags_Mutable().SetTagCount(Tag, FMath::Max(0, TagCount + CountDelta));
+			}
+		}
+	}
+	
 	// For removal, reorder calls so that FillParentTags is only called once
 	if (CountDelta > 0)
 	{
-		for (auto TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
+		if (GameplayTagCountContainer.UpdateTagCount(Tag, CountDelta, TagRepState))
+		{
+			OnTagUpdated(Tag, true);
+		}
+	}
+	else if (CountDelta < 0)
+	{
+		TArray<FDeferredTagChangeDelegate> DeferredTagChangeDelegates;
+		if (GameplayTagCountContainer.UpdateTagCount_DeferredParentRemoval(Tag, CountDelta, DeferredTagChangeDelegates))
+		{
+			GameplayTagCountContainer.FillParentTags();
+			OnTagUpdated(Tag, false);
+			if (UE::Net::ShouldUseIrisReplication() && !CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread())
+			{
+				// Iris replication doesn't work the same so we're falling back to using the Minimal and replicated loose tags until it's fixed.
+				const UWorld* World = GetWorld();
+				ENetMode NetMode = World ? World->GetNetMode() : NM_Standalone;
+				if (NetMode == NM_DedicatedServer || NetMode == NM_ListenServer)
+				{
+					FMinimalReplicationTagCountMap& MTagMap = GetMinimalReplicationTags_Mutable();
+					if (MTagMap.TagMap.Contains(Tag))
+					{
+						MTagMap.RemoveTag(Tag);
+					}
+
+					FMinimalReplicationTagCountMap& RLTagMap = GetReplicatedLooseTags_Mutable();
+					if (RLTagMap.TagMap.Contains(Tag))
+					{
+						RLTagMap.RemoveTag(Tag);
+					}
+				}
+			}
+
+			for (FDeferredTagChangeDelegate& Delegate : DeferredTagChangeDelegates)
+			{
+				Delegate.Execute();
+			}
+		}
+	}
+	
+	if (UE::Net::ShouldUseIrisReplication() && CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread())
+	{
+		MARK_PROPERTY_DIRTY_FROM_NAME(ThisClass, GameplayTagCountContainer, this);
+	}
+}
+
+void UAbilitySystemComponent::UpdateTagMap_Internal(const FGameplayTagContainer& Container, const int32 CountDelta, EGameplayTagReplicationState TagRepState)
+{
+	if (UE::Net::ShouldUseIrisReplication() && !CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread())
+	{
+		// Iris replication doesn't work the same so we're falling back to using the Minimal and replicated loose tags until it's fixed.
+		const UWorld* World = GetWorld();
+		ENetMode NetMode = World ? World->GetNetMode() : NM_Standalone;
+		if (NetMode == NM_DedicatedServer || NetMode == NM_ListenServer)
+		{
+			if (TagRepState == EGameplayTagReplicationState::TagOnly)
+			{
+				for (TArray<FGameplayTag>::TConstIterator TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
+				{
+					const FGameplayTag& Tag = *TagIt;
+					int32& TagCount = GetMinimalReplicationTags_Mutable().TagMap.FindOrAdd(Tag);
+					GetMinimalReplicationTags_Mutable().SetTagCount(Tag, FMath::Max(0, TagCount + CountDelta));
+				}
+			}
+			else if (TagRepState > EGameplayTagReplicationState::TagOnly)
+			{
+				for (TArray<FGameplayTag>::TConstIterator TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
+				{
+					const FGameplayTag& Tag = *TagIt;
+					int32& TagCount = GetReplicatedLooseTags_Mutable().TagMap.FindOrAdd(Tag);
+					GetReplicatedLooseTags_Mutable().SetTagCount(Tag, FMath::Max(0, TagCount + CountDelta));
+				}
+			}
+		}
+	}
+	
+	// For removal, reorder calls so that FillParentTags is only called once
+	if (CountDelta > 0)
+	{
+		for (TArray<FGameplayTag>::TConstIterator TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
 		{
 			const FGameplayTag& Tag = *TagIt;
-			if (GameplayTagCountContainer.UpdateTagCount(Tag, CountDelta))
+			if (GameplayTagCountContainer.UpdateTagCount(Tag, CountDelta, TagRepState))
 			{
 				OnTagUpdated(Tag, true);
 			}
@@ -659,12 +759,32 @@ void UAbilitySystemComponent::UpdateTagMap_Internal(const FGameplayTagContainer&
 		RemovedTags.Reserve(Container.Num()); // pre-allocate max number (if all are removed)
 		TArray<FDeferredTagChangeDelegate> DeferredTagChangeDelegates;
 
-		for (auto TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
+		for (TArray<FGameplayTag>::TConstIterator TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
 		{
 			const FGameplayTag& Tag = *TagIt;
 			if (GameplayTagCountContainer.UpdateTagCount_DeferredParentRemoval(Tag, CountDelta, DeferredTagChangeDelegates))
 			{
 				RemovedTags.Add(Tag);
+				if (UE::Net::ShouldUseIrisReplication() && !CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread())
+				{
+					// Iris replication doesn't work the same so we're falling back to using the Minimal and replicated loose tags until it's fixed.
+					const UWorld* World = GetWorld();
+					ENetMode NetMode = World ? World->GetNetMode() : NM_Standalone;
+					if (NetMode == NM_DedicatedServer || NetMode == NM_ListenServer)
+					{
+						FMinimalReplicationTagCountMap& MTagMap = GetMinimalReplicationTags_Mutable();
+						if (MTagMap.TagMap.Contains(Tag))
+						{
+							MTagMap.RemoveTag(Tag);
+						}
+
+						FMinimalReplicationTagCountMap& RLTagMap = GetReplicatedLooseTags_Mutable();
+						if (RLTagMap.TagMap.Contains(Tag))
+						{
+							RLTagMap.RemoveTag(Tag);
+						}
+					}
+				}
 			}
 		}
 
@@ -684,6 +804,11 @@ void UAbilitySystemComponent::UpdateTagMap_Internal(const FGameplayTagContainer&
 		{
 			OnTagUpdated(Tag, false);
 		}
+	}
+	
+	if (UE::Net::ShouldUseIrisReplication() && CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread())
+	{
+		MARK_PROPERTY_DIRTY_FROM_NAME(ThisClass, GameplayTagCountContainer, this);
 	}
 }
 
@@ -767,7 +892,7 @@ void UAbilitySystemComponent::ResetTagMap()
 
 void UAbilitySystemComponent::NotifyTagMap_StackCountChange(const FGameplayTagContainer& Container)
 {
-	for (auto TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
+	for (TArray<FGameplayTag>::TConstIterator TagIt = Container.CreateConstIterator(); TagIt; ++TagIt)
 	{
 		const FGameplayTag& Tag = *TagIt;
 		GameplayTagCountContainer.Notify_StackCountChange(Tag);
@@ -925,12 +1050,18 @@ FActiveGameplayEffectHandle UAbilitySystemComponent::ApplyGameplayEffectSpecToSe
 	if (!bSuppressGameplayCues && !Spec.Def->bSuppressStackingCues && bFoundExistingStackableGE && AppliedEffect && !AppliedEffect->bIsInhibited)
 	{
 		ensureMsgf(OurCopyOfSpec, TEXT("OurCopyOfSpec will always be valid if bFoundExistingStackableGE"));
-		if (OurCopyOfSpec && OurCopyOfSpec->GetStackCount() > Spec.GetStackCount())
+		if (OurCopyOfSpec && OurCopyOfSpec->GetStackCount() >= Spec.GetStackCount())
 		{
-			// Because PostReplicatedChange will get called from modifying the stack count
-			// (and not PostReplicatedAdd) we won't know which GE was modified.
-			// So instead we need to explicitly RPC the client so it knows the GC needs updating
-			UAbilitySystemGlobals::Get().GetGameplayCueManager()->InvokeGameplayCueAddedAndWhileActive_FromSpec(this, *OurCopyOfSpec, PredictionKey);
+			// If we're predicting we want to activate on ourselves
+			if (!IsOwnerActorAuthoritative() && PredictionKey.IsLocalClientKey())
+			{
+				InvokeGameplayCueEvent(*OurCopyOfSpec, EGameplayCueEvent::OnActive);
+				InvokeGameplayCueEvent(*OurCopyOfSpec, EGameplayCueEvent::WhileActive);
+			}
+			else
+			{
+				UAbilitySystemGlobals::Get().GetGameplayCueManager()->InvokeGameplayCueAddedAndWhileActive_FromSpec(this, *OurCopyOfSpec, PredictionKey);
+			}
 		}
 	}
 	
@@ -1063,6 +1194,22 @@ void UAbilitySystemComponent::RemoveActiveGameplayEffect_NoReturn(FActiveGamepla
 void UAbilitySystemComponent::RemoveActiveGameplayEffect_AllowClientRemoval(FActiveGameplayEffectHandle Handle, int32 StacksToRemove)
 {
 	ActiveGameplayEffects.RemoveActiveGameplayEffect(Handle, StacksToRemove);
+}
+
+void UAbilitySystemComponent::OnRejectedActiveGameplayEffect(FActiveGameplayEffectHandle Handle, int32 StacksToRemove)
+{
+	constexpr bool bPredictionRejected = true;
+	ActiveGameplayEffects.RemoveActiveGameplayEffect(Handle, StacksToRemove, bPredictionRejected);
+}
+
+void UAbilitySystemComponent::OnCaughtUpActiveGameplayEffect(FActiveGameplayEffectHandle Handle, int32 StacksToRemove)
+{
+	ActiveGameplayEffects.RemoveActiveGameplayEffect(Handle, StacksToRemove);
+}
+
+void UAbilitySystemComponent::OnPredictiveGameplayEffectStackCaughtUp(FActiveGameplayEffectHandle Handle)
+{
+	ActiveGameplayEffects.OnPredictiveGameplayEffectStackCaughtUp(Handle);
 }
 
 void UAbilitySystemComponent::RemoveActiveGameplayEffectBySourceEffect(TSubclassOf<UGameplayEffect> GameplayEffect, UAbilitySystemComponent* InstigatorAbilitySystemComponent, int32 StacksToRemove /*= -1*/)
@@ -1340,6 +1487,11 @@ void UAbilitySystemComponent::AddGameplayCue_Internal(const FGameplayTag Gamepla
 {
 	if (IsOwnerActorAuthoritative())
 	{
+		if (!GameplayCueTag.IsValid())
+		{
+			return;
+		}
+
 		const bool bWasInList = GameplayCueContainer.HasCue(GameplayCueTag);
 
 		ForceReplication();
@@ -1634,6 +1786,7 @@ void UAbilitySystemComponent::GetLifetimeReplicatedProps(TArray< FLifetimeProper
 	DOREPLIFETIME_WITH_PARAMS_FAST(UAbilitySystemComponent, RepAnimMontageInfo, Params);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UAbilitySystemComponent, OwnerActor, Params);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UAbilitySystemComponent, AvatarActor, Params);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UAbilitySystemComponent, GameplayTagCountContainer, Params);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UAbilitySystemComponent, ReplicatedLooseTags, Params);
 
 	Params.Condition = COND_ReplayOrOwner;
@@ -1732,17 +1885,6 @@ bool UAbilitySystemComponent::ReplicateSubobjects(UActorChannel* Channel, FOutBu
 	}
 
 	return WroteSomething;
-}
-
-void UAbilitySystemComponent::GetSubobjectsWithStableNamesForNetworking(TArray<UObject*>& Objs)
-{
-	for (const UAttributeSet* Set : GetSpawnedAttributes())
-	{
-		if (Set && Set->IsNameStableForNetworking())
-		{
-			Objs.Add(const_cast<UAttributeSet*>(Set));
-		}
-	}
 }
 
 void UAbilitySystemComponent::PreNetReceive()
@@ -2680,9 +2822,9 @@ void UAbilitySystemComponent::Debug_Internal(FAbilitySystemComponentDebugInfo& I
 			if (ActiveGE.Spec.GetStackCount() > 1)
 			{
 
-				if (ActiveGE.Spec.Def->StackingType == EGameplayEffectStackingType::AggregateBySource)
+				if (ActiveGE.Spec.Def->GetStackingType() == EGameplayEffectStackingType::AggregateBySource)
 				{
-					StackString = FString::Printf(TEXT("(Stacks: %d. From: %s) "), ActiveGE.Spec.GetStackCount(), *GetNameSafe(ActiveGE.Spec.GetContext().GetInstigatorAbilitySystemComponent()->GetAvatarActor_Direct()));
+					StackString = FString::Printf(TEXT("(Stacks: %d. From: %s) "), ActiveGE.Spec.GetStackCount(), ActiveGE.Spec.GetContext().GetInstigatorAbilitySystemComponent() ? *GetNameSafe(ActiveGE.Spec.GetContext().GetInstigatorAbilitySystemComponent()->GetAvatarActor_Direct()) : TEXT("Invalid"));
 				}
 				else
 				{
@@ -3098,17 +3240,57 @@ void UAbilitySystemComponent::OnRep_SpawnedAttributes(const TArray<UAttributeSet
 		}
 	}
 
-	// Find the attribute sets that got removed
+	// Create a map of attribute set class to latest object to detect removed and replaced attribute sets.
+	TMap<TSubclassOf<UAttributeSet>, UAttributeSet*> NewAttributeSetClasses;
+	for (UAttributeSet* NewAttributeSet : SpawnedAttributes)
+	{
+		if (IsValid(NewAttributeSet))
+		{
+			NewAttributeSetClasses.Add(NewAttributeSet->GetClass(), NewAttributeSet);
+		}
+	}
+
+	// Find the attribute sets that got removed or replaced by one of the same class. Replacement here means that the an attribute set instance
+	// is no longer in SpawnedAttributes, but a new one exists of the same class. This happens when the client and server both created an attribute set
+	// and the server's instance is replicated over, for example when using DefaultStartingData. For removed attribute sets, their aggregators should be 
+	// cleaned up. For replaced attribute sets, the aggregators should remain valid.
 	for (UAttributeSet* PreviousAttributeSet : PreviousSpawnedAttributes)
 	{
-		if (PreviousAttributeSet && SpawnedAttributes.Find(PreviousAttributeSet) == INDEX_NONE)
+		if (PreviousAttributeSet)
 		{
+			UClass* AttributeSetClass = PreviousAttributeSet->GetClass();
 			TArray<FGameplayAttribute> Attributes;
 			UAttributeSet::GetAttributesFromSetClass(PreviousAttributeSet->GetClass(), Attributes);
-			for (const FGameplayAttribute& Attribute : Attributes)
+
+			// Case: Attribute set removed and not replaced
+			if (!NewAttributeSetClasses.Contains(PreviousAttributeSet->GetClass()))
 			{
-				ABILITY_LOG(Log, TEXT("Cleaning up aggregator for attribute '%s' due to OnRep_SpawnedAttributes detecting removal of '%s'"), *Attribute.GetName(), *PreviousAttributeSet->GetName());
-				ActiveGameplayEffects.CleanupAttributeAggregator(Attribute);
+				// The attribute set no longer exists after removal on the server.
+				// Remove any aggregators for all the attributes in it.
+				for (const FGameplayAttribute& Attribute : Attributes)
+				{
+					ABILITY_LOG(Log, TEXT("Cleaning up aggregator for attribute '%s' due to OnRep_SpawnedAttributes detecting removal of '%s' without replacement"), *Attribute.GetName(), *PreviousAttributeSet->GetName());
+					ActiveGameplayEffects.CleanupAttributeAggregator(Attribute);
+				}
+			}
+			// Case: Attribute set replaced by server-replicated object
+			else if (PreviousAttributeSet != NewAttributeSetClasses[AttributeSetClass])
+			{
+				UAttributeSet* NewAttributeSet = NewAttributeSetClasses[AttributeSetClass];
+				for (const FGameplayAttribute& Attribute : Attributes)
+				{
+					ABILITY_LOG(Log, TEXT("Keeping aggregator for attribute '%s' due to OnRep_SpawnedAttributes detecting replacement '%s' for '%s'"), *Attribute.GetName(), *NewAttributeSet->GetName(), *PreviousAttributeSet->GetName());
+
+					// Since we're replacing the attribute set with the server replicated one, give it a chance to do setup on the 
+					// existing aggregator like metadata and binding to its delegates. However, only do this for non-system attributes, 
+					// mirroring behavior in FindOrCreateAttributeAggregator(). Also don't actually created the aggregator if it doesn't 
+					// exist. Aggregators are created on-demand when they are first modified.
+					if (Attribute.IsSystemAttribute() == false && ActiveGameplayEffects.AttributeAggregatorMap.Contains(Attribute))
+					{
+						FAggregatorRef& Aggregator = ActiveGameplayEffects.FindOrCreateAttributeAggregator(Attribute);
+						NewAttributeSet->OnAttributeAggregatorCreated(Attribute, Aggregator.Get());
+					}
+				}
 			}
 		}
 	}

@@ -1,6 +1,8 @@
 # TurnBasedSample Document
 In this project, I Modify Unreal's GAS plugin to support turn-based games.
 
+Support UE 5.6 5.7
+
 ## How to use
 
 ### Enable turn based effect

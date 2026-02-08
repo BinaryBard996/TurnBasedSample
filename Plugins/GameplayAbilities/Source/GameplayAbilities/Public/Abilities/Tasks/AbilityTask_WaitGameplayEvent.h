@@ -8,12 +8,14 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitGameplayEvent.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWaitGameplayEventDelegate, FGameplayEventData, Payload);
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitGameplayEvent : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitGameplayEvent : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -26,18 +28,18 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitGameplayEvent : public UAbilityTask
 	 * If OnlyMatchExact = false it will trigger for nested tags
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitGameplayEvent* WaitGameplayEvent(UGameplayAbility* OwningAbility, UPARAM(meta=(GameplayTagFilter="GameplayEventTagsCategory"))FGameplayTag EventTag, AActor* OptionalExternalTarget=nullptr, bool OnlyTriggerOnce=false, bool OnlyMatchExact = true);
+	static UE_API UAbilityTask_WaitGameplayEvent* WaitGameplayEvent(UGameplayAbility* OwningAbility, UPARAM(meta=(GameplayTagFilter="GameplayEventTagsCategory"))FGameplayTag EventTag, AActor* OptionalExternalTarget=nullptr, bool OnlyTriggerOnce=false, bool OnlyMatchExact = true);
 
-	void SetExternalTarget(AActor* Actor);
+	UE_API void SetExternalTarget(AActor* Actor);
 
-	UAbilitySystemComponent* GetTargetASC();
+	UE_API UAbilitySystemComponent* GetTargetASC();
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
-	virtual void GameplayEventCallback(const FGameplayEventData* Payload);
-	virtual void GameplayEventContainerCallback(FGameplayTag MatchingTag, const FGameplayEventData* Payload);
+	UE_API virtual void GameplayEventCallback(const FGameplayEventData* Payload);
+	UE_API virtual void GameplayEventContainerCallback(FGameplayTag MatchingTag, const FGameplayEventData* Payload);
 
-	void OnDestroy(bool AbilityEnding) override;
+	UE_API void OnDestroy(bool AbilityEnding) override;
 
 	FGameplayTag Tag;
 
@@ -50,3 +52,5 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitGameplayEvent : public UAbilityTask
 
 	FDelegateHandle MyHandle;
 };
+
+#undef UE_API

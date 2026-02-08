@@ -7,13 +7,15 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_Repeat.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FRepeatedActionDelegate, int32, ActionNumber);
 
 /**
  *	Repeat a task a certain number of times at a given interval.
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_Repeat : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_Repeat : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -23,15 +25,15 @@ class GAMEPLAYABILITIES_API UAbilityTask_Repeat : public UAbilityTask
 	UPROPERTY(BlueprintAssignable)
 	FRepeatedActionDelegate		OnFinished;
 
-	virtual FString GetDebugString() const override;
+	UE_API virtual FString GetDebugString() const override;
 
-	void PerformAction();
+	UE_API void PerformAction();
 
 	/** Start a task that repeats an action or set of actions. */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_Repeat* RepeatAction(UGameplayAbility* OwningAbility, float TimeBetweenActions, int32 TotalActionCount);
+	static UE_API UAbilityTask_Repeat* RepeatAction(UGameplayAbility* OwningAbility, float TimeBetweenActions, int32 TotalActionCount);
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 protected:
 	int32 ActionPerformancesDesired;
@@ -41,5 +43,7 @@ protected:
 	/** Handle for efficient management of PerformAction timer */
 	FTimerHandle TimerHandle_PerformAction;
 
-	virtual void OnDestroy(bool AbilityIsEnding) override;
+	UE_API virtual void OnDestroy(bool AbilityIsEnding) override;
 };
+
+#undef UE_API

@@ -2,7 +2,8 @@
 
 #include "Serialization/GameplayAbilityTargetingLocationInfoNetSerializer.h"
 
-#if UE_WITH_IRIS
+#include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayAbilityTargetingLocationInfoNetSerializer)
+
 
 #include "Abilities/GameplayAbilityTargetTypes.h"
 #include "Iris/Core/BitTwiddling.h"
@@ -190,6 +191,7 @@ void FGameplayAbilityTargetingLocationInfoNetSerializer::Deserialize(FNetSeriali
 		FNetFreeDynamicStateArgs FreeArgs;
 		FreeArgs.NetSerializerConfig = &StructNetSerializerConfig;
 		FreeArgs.Source = NetSerializerValuePointer(&Target);
+		StructNetSerializer->FreeDynamicState(Context, FreeArgs);
 	}
 
 	Target = TempValue;
@@ -473,4 +475,3 @@ void FGameplayAbilityTargetingLocationInfoNetSerializer::FNetSerializerRegistryD
 
 }
 
-#endif // UE_WITH_IRIS

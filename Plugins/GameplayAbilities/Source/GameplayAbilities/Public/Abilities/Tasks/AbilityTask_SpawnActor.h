@@ -9,6 +9,8 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_SpawnActor.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FSpawnActorDelegate, AActor*, SpawnedActor);
 
 /**
@@ -23,8 +25,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FSpawnActorDelegate, AActor*, Spawne
  *	actor down to it. We could potentially also use this to do predictive actor spawning / reconciliation.
  */
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_SpawnActor: public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_SpawnActor: public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -37,14 +39,16 @@ class GAMEPLAYABILITIES_API UAbilityTask_SpawnActor: public UAbilityTask
 	
 	/** Spawn new Actor on the network authority (server) */
 	UFUNCTION(BlueprintCallable, meta=(HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category="Ability|Tasks")
-	static UAbilityTask_SpawnActor* SpawnActor(UGameplayAbility* OwningAbility, FGameplayAbilityTargetDataHandle TargetData, TSubclassOf<AActor> Class);
+	static UE_API UAbilityTask_SpawnActor* SpawnActor(UGameplayAbility* OwningAbility, FGameplayAbilityTargetDataHandle TargetData, TSubclassOf<AActor> Class);
 
 	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
-	bool BeginSpawningActor(UGameplayAbility* OwningAbility, FGameplayAbilityTargetDataHandle TargetData, TSubclassOf<AActor> Class, AActor*& SpawnedActor);
+	UE_API bool BeginSpawningActor(UGameplayAbility* OwningAbility, FGameplayAbilityTargetDataHandle TargetData, TSubclassOf<AActor> Class, AActor*& SpawnedActor);
 
 	UFUNCTION(BlueprintCallable, meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true"), Category = "Abilities")
-	void FinishSpawningActor(UGameplayAbility* OwningAbility, FGameplayAbilityTargetDataHandle TargetData, AActor* SpawnedActor);
+	UE_API void FinishSpawningActor(UGameplayAbility* OwningAbility, FGameplayAbilityTargetDataHandle TargetData, AActor* SpawnedActor);
 
 protected:
 	FGameplayAbilityTargetDataHandle CachedTargetDataHandle;
 };
+
+#undef UE_API

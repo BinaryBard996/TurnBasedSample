@@ -5,6 +5,8 @@
 #include "AttributeSet.h"
 #include "GameplayEffectAttributeCaptureDefinition.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 /** Enumeration for options of where to capture gameplay attributes from for gameplay effects. */
 UENUM()
 enum class EGameplayEffectAttributeCaptureSource : uint8
@@ -18,7 +20,7 @@ enum class EGameplayEffectAttributeCaptureSource : uint8
 
 /** Struct defining gameplay attribute capture options for gameplay effects */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayEffectAttributeCaptureDefinition
+struct FGameplayEffectAttributeCaptureDefinition
 {
 	GENERATED_USTRUCT_BODY()
 
@@ -47,8 +49,8 @@ struct GAMEPLAYABILITIES_API FGameplayEffectAttributeCaptureDefinition
 	bool bSnapshot;
 
 	/** Equality/Inequality operators */
-	bool operator==(const FGameplayEffectAttributeCaptureDefinition& Other) const;
-	bool operator!=(const FGameplayEffectAttributeCaptureDefinition& Other) const;
+	UE_API bool operator==(const FGameplayEffectAttributeCaptureDefinition& Other) const;
+	UE_API bool operator!=(const FGameplayEffectAttributeCaptureDefinition& Other) const;
 
 	/**
 	 * Get type hash for the capture definition; Implemented to allow usage in TMap
@@ -64,6 +66,7 @@ struct GAMEPLAYABILITIES_API FGameplayEffectAttributeCaptureDefinition
 		return Hash;
 	}
 
-	FString ToSimpleString() const;
+	UE_API FString ToSimpleString() const;
 };
 
+#undef UE_API

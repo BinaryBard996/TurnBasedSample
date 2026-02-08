@@ -2,6 +2,8 @@
 
 #include "GameplayAbilitiesDeveloperSettings.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayAbilitiesDeveloperSettings)
+
 #if WITH_EDITOR
 bool UGameplayAbilitiesDeveloperSettings::CanEditChange(const FProperty* InProperty) const
 {

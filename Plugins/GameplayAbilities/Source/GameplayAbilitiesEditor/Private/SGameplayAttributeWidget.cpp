@@ -280,6 +280,12 @@ TSharedPtr<FAttributeViewerNode> SAttributeListWidget::UpdatePropertyOptions()
 			{
 				FProperty *Property = *PropertyIt;
 
+				// Ignore property types that cannot represent gameplay attributes
+				if (!FGameplayAttribute::IsSupportedProperty(Property))
+				{
+					continue;
+				}
+
 				// if we have a search string and this doesn't match, don't show it
 				if (AttributeTextFilter.IsValid() && !AttributeTextFilter->PassesFilter(*Property))
 				{
@@ -388,7 +394,7 @@ void SGameplayAttributeWidget::OnCopyAttribute(FProperty* AttributeProperty)
 
 	if (Attribute.IsValid())
 	{
-		if (const TObjectPtr<UObject> OwnerObject = Attribute.GetAttributeSetClass()->ClassDefaultObject)
+		if (const TObjectPtr<UObject> OwnerObject = Attribute.GetAttributeSetClass()->GetDefaultObject(false))
 		{
 			FString ExportedString;
 

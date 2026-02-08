@@ -8,9 +8,11 @@
 #include "GameplayEffect.h"
 #include "GameplayModMagnitudeCalculation.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 /** Class used to perform custom gameplay effect modifier calculations, either via blueprint or native code */ 
-UCLASS(BlueprintType, Blueprintable, Abstract)
-class GAMEPLAYABILITIES_API UGameplayModMagnitudeCalculation : public UGameplayEffectCalculation
+UCLASS(BlueprintType, Blueprintable, Abstract, MinimalAPI)
+class UGameplayModMagnitudeCalculation : public UGameplayEffectCalculation
 {
 
 public:
@@ -25,7 +27,7 @@ public:
 	 * @return Computed magnitude of the modifier
 	 */
 	UFUNCTION(BlueprintNativeEvent, Category="Calculation")
-	float CalculateBaseMagnitude(const FGameplayEffectSpec& Spec) const;
+	UE_API float CalculateBaseMagnitude(const FGameplayEffectSpec& Spec) const;
 
 	/**
 	 * If the magnitude resultant from the custom calculation depends on game code-specific conditions that are not under the purview of the ability system,
@@ -37,15 +39,15 @@ public:
 	 * 
 	 * @return Multicast delegate that will fire when this calculation's external dependencies change, if any
 	 */
-	virtual FOnExternalGameplayModifierDependencyChange* GetExternalModifierDependencyMulticast(const FGameplayEffectSpec& Spec, UWorld* World) const;
+	UE_API virtual FOnExternalGameplayModifierDependencyChange* GetExternalModifierDependencyMulticast(const FGameplayEffectSpec& Spec, UWorld* World) const;
 
 	/** Simple accessor to bAllowNonNetAuthorityDependencyRegistration with some validation: Read the comment on that variable for usage!!! */
-	bool ShouldAllowNonNetAuthorityDependencyRegistration() const;
+	UE_API bool ShouldAllowNonNetAuthorityDependencyRegistration() const;
 
 protected:
 	
 	/** Convenience method to get attribute magnitude during a CalculateMagnitude call */
-	bool GetCapturedAttributeMagnitude(const FGameplayEffectAttributeCaptureDefinition& Def, const FGameplayEffectSpec& Spec, const FAggregatorEvaluateParameters& EvaluationParameters, OUT float& Magnitude) const;
+	UE_API bool GetCapturedAttributeMagnitude(const FGameplayEffectAttributeCaptureDefinition& Def, const FGameplayEffectSpec& Spec, const FAggregatorEvaluateParameters& EvaluationParameters, OUT float& Magnitude) const;
 
 	/** 
 	 * Whether the calculation allows non-net authorities to register the external dependency multi-cast delegate or not; Effectively
@@ -74,7 +76,7 @@ protected:
 	 * @return The magnitude value if found, zero otherwise
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure = false, Category = "Ability|GameplayEffect", meta=(DisplayName="Get Captured Attribute Magnitude", ScriptName="GetCapturedAttributeMagnitude"))
-	float K2_GetCapturedAttributeMagnitude(const FGameplayEffectSpec& EffectSpec, FGameplayAttribute Attribute, const FGameplayTagContainer& SourceTags, const FGameplayTagContainer& TargetTags) const;
+	UE_API float K2_GetCapturedAttributeMagnitude(const FGameplayEffectSpec& EffectSpec, FGameplayAttribute Attribute, const FGameplayTagContainer& SourceTags, const FGameplayTagContainer& TargetTags) const;
 
 	/**
 	 * Extracts the Set by Caller Magnitude from a Gameplay Effect Spec
@@ -85,7 +87,7 @@ protected:
 	 * @return The magnitude value if found, zero otherwise
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure = false, Category = "Ability|GameplayEffect")
-	float GetSetByCallerMagnitudeByTag(const FGameplayEffectSpec& EffectSpec, const FGameplayTag& Tag) const;
+	UE_API float GetSetByCallerMagnitudeByTag(const FGameplayEffectSpec& EffectSpec, const FGameplayTag& Tag) const;
 
 	/**
 	 * Extracts the Set by Caller Magnitude from a Gameplay Effect Spec
@@ -96,7 +98,7 @@ protected:
 	 * @return The magnitude value if found, zero otherwise
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure = false, Category = "Ability|GameplayEffect")
-	float GetSetByCallerMagnitudeByName(const FGameplayEffectSpec& EffectSpec, const FName& MagnitudeName) const;
+	UE_API float GetSetByCallerMagnitudeByName(const FGameplayEffectSpec& EffectSpec, const FName& MagnitudeName) const;
 
 	/**
 	 * Copies and returns the source aggregated tags from a Gameplay Effect Spec
@@ -106,7 +108,7 @@ protected:
 	 * @return Gameplay Tag Container with the copied tags. The container will be empty if no captured source tags exist.
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure = false, Category = "Ability|GameplayEffect")
-	FGameplayTagContainer GetSourceAggregatedTags(const FGameplayEffectSpec& EffectSpec) const;
+	UE_API FGameplayTagContainer GetSourceAggregatedTags(const FGameplayEffectSpec& EffectSpec) const;
 
 	/**
 	 * Returns the source actor tags from a Gameplay Effect Spec
@@ -116,7 +118,7 @@ protected:
 	 * @return Gameplay Tag Container with the copied tags. The container will be empty if no captured source tags exist.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|GameplayEffect")
-	const FGameplayTagContainer& GetSourceActorTags(const FGameplayEffectSpec& EffectSpec) const;
+	UE_API const FGameplayTagContainer& GetSourceActorTags(const FGameplayEffectSpec& EffectSpec) const;
 
 	/**
 	 * Returns the source spec tags from a Gameplay Effect Spec
@@ -126,7 +128,7 @@ protected:
 	 * @return Gameplay Tag Container with the copied tags. The container will be empty if no captured source tags exist.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|GameplayEffect")
-	const FGameplayTagContainer& GetSourceSpecTags(const FGameplayEffectSpec& EffectSpec) const;
+	UE_API const FGameplayTagContainer& GetSourceSpecTags(const FGameplayEffectSpec& EffectSpec) const;
 
 	/**
 	 * Copies and returns the target aggregated tags from a Gameplay Effect Spec
@@ -136,7 +138,7 @@ protected:
 	 * @return Gameplay Tag Container with the copied tags. The container will be empty if no captured source tags exist.
 	 */
 	UFUNCTION(BlueprintCallable, BlueprintPure = false, Category = "Ability|GameplayEffect")
-	FGameplayTagContainer GetTargetAggregatedTags(const FGameplayEffectSpec& EffectSpec) const;
+	UE_API FGameplayTagContainer GetTargetAggregatedTags(const FGameplayEffectSpec& EffectSpec) const;
 
 	/**
 	 * Returns the target actor tags from a Gameplay Effect Spec
@@ -147,7 +149,7 @@ protected:
 	 * @return Gameplay Tag Container with the copied tags. The container will be empty if no captured source tags exist.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|GameplayEffect")
-	const FGameplayTagContainer& GetTargetActorTags(const FGameplayEffectSpec& EffectSpec) const;
+	UE_API const FGameplayTagContainer& GetTargetActorTags(const FGameplayEffectSpec& EffectSpec) const;
 
 	/**
 	 * Returns the target spec tags from a Gameplay Effect Spec
@@ -158,5 +160,7 @@ protected:
 	 * @return Gameplay Tag Container with the copied tags. The container will be empty if no captured source tags exist.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Ability|GameplayEffect")
-	const FGameplayTagContainer& GetTargetSpecTags(const FGameplayEffectSpec& EffectSpec) const;
+	UE_API const FGameplayTagContainer& GetTargetSpecTags(const FGameplayEffectSpec& EffectSpec) const;
 };
+
+#undef UE_API

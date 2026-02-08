@@ -2,7 +2,8 @@
 
 #include "InternalMinimalReplicationTagCountMapNetSerializer.h"
 
-#if UE_WITH_IRIS
+#include UE_INLINE_GENERATED_CPP_BY_NAME(InternalMinimalReplicationTagCountMapNetSerializer)
+
 
 #include "GameplayEffectTypes.h"
 
@@ -29,4 +30,3 @@ void FMinimalReplicationTagCountMapForNetSerializer::ClampTagCount(SIZE_T MaxTag
 	}
 }
 
-#endif

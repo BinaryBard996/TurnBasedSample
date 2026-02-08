@@ -13,8 +13,79 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(ScalableFloat)
 
+#define LOCTEXT_NAMESPACE "ScalableFloat"
+
 #if WITH_EDITOR
 #include "EditorReimportHandler.h"
+#include "Misc/DataValidation.h"
+
+EDataValidationResult FScalableFloat::IsDataValid(FDataValidationContext& Context, const FString& PathName) const
+{
+	if (Curve.CurveTable)
+	{
+		if (Curve.RowName.IsNone())
+		{
+			Context.AddError(FText::Format(LOCTEXT("RowNameIsNone", "{0}: CurveTable Row is None"), FText::FromString(PathName)));
+			return EDataValidationResult::Invalid;
+		}
+
+		if (!Curve.CurveTable->FindCurve(Curve.RowName, PathName, false))
+		{
+			Context.AddError(FText::Format(LOCTEXT("RowNameDoesNotExist", "{0}: RowName {1} does not exist in CurveTable {2}"),
+				FText::FromString(PathName), FText::FromString(Curve.RowName.ToString()), FText::FromString(Curve.CurveTable.GetName())));
+			return EDataValidationResult::Invalid;
+		}
+	}
+	else if (RegistryType.IsValid())
+	{
+		if (Curve.RowName.IsNone())
+		{
+			Context.AddError(FText::Format(LOCTEXT("RegistryRowNameIsNone", "{0}: Registry CurveTable Row is None"), FText::FromString(PathName)));
+			return EDataValidationResult::Invalid;
+		}
+
+		const UDataRegistrySubsystem* SubSystem = UDataRegistrySubsystem::Get();
+		if (!SubSystem->IsConfigEnabled(false) || !SubSystem->AreRegistriesInitialized())
+		{
+			// If we're given a use case, it's more likely to be a more thorough IsDataValid, so let them know why this failed to validate.
+			if (Context.GetValidationUsecase() != EDataValidationUsecase::None)
+			{
+				Context.AddWarning(FText::Format(LOCTEXT("DataRegistriesNotLoaded", "{0}: DataRegistries were not loaded in time for validation"),
+					FText::FromString(PathName)));
+			}
+
+			// We are not ready to evaluate this until after load
+			return EDataValidationResult::NotValidated;
+		}
+
+		// This case is a bit tough, we are not 100% sure all DataRegistries are loaded.  We should give some indication an error can be occurring,
+		// but we also don't want to fail any automated checks that skip DataRegistry loading.
+		float OutValue = 0.0f;
+		const FRealCurve* OutCurve = nullptr;
+		const FDataRegistryId DataRegistryId(RegistryType, Curve.RowName);
+		const FDataRegistryCacheGetResult GetCurveResult = SubSystem->EvaluateCachedCurve(OutValue, OutCurve, DataRegistryId, OutValue);
+		if (!GetCurveResult)
+		{
+			FText WarningText = FText::Format(LOCTEXT("DataRegistryCurveDoesNotExist", "{0}: Specified DataRegistry Curve '{1}' does not exist (or was not loaded - you may need to load it to fix this message)"),
+				FText::FromString(PathName), DataRegistryId.ToText());
+
+			switch (Context.GetValidationUsecase())
+			{
+				// If we're manually testing, we can enforce the user loads the DataRegistry to confirm it's right 
+				case EDataValidationUsecase::Manual:
+					Context.AddWarning(WarningText);
+					return EDataValidationResult::NotValidated;
+
+				// For all other cases, let's downgrade to an info message so we can inform a user without tripping any automation errors
+				default:
+					Context.AddMessage(EMessageSeverity::Info, WarningText);
+					return EDataValidationResult::NotValidated;
+			}
+		}
+	}
+
+	return EDataValidationResult::Valid;
+}
 #endif
 
 bool FScalableFloat::EvaluateCurveAtLevel(float& OutValue, const FRealCurve*& OutCurve, float Level, const FString& ContextString, bool bWarnIfInvalid) const
@@ -38,7 +109,8 @@ bool FScalableFloat::EvaluateCurveAtLevel(float& OutValue, const FRealCurve*& Ou
 				CachedCurve = OutCurve = Curve.GetCurve(ContextString, bWarnIfInvalid);
 				LocalCachedCurveID = GlobalCachedCurveID;
 			}
-			else if (RegistryType.IsValid())
+			// Don't lookup during shutdown as the subsystem may have been deleted
+			else if (RegistryType.IsValid() && !IsEngineExitRequested())
 			{
 				UDataRegistrySubsystem* SubSystem = UDataRegistrySubsystem::Get();
 				if (ensure(SubSystem))
@@ -178,10 +250,7 @@ bool FScalableFloat::IsValid() const
 
 bool FScalableFloat::IsValidWithWarnings(const FString& ContextString) const
 {
-	float OutFloat;
-	const FRealCurve* FoundCurve;
-
-	return EvaluateCurveAtLevel(OutFloat, FoundCurve, 0.f, ContextString, true);
+	return true;
 }
 
 bool FScalableFloat::SerializeFromMismatchedTag(const FPropertyTag& Tag, FStructuredArchive::FSlot Slot)
@@ -485,3 +554,4 @@ FAutoConsoleCommand FindCoefficientScalableFloatsCommand(
 
 #endif
 
+#undef LOCTEXT_NAMESPACE

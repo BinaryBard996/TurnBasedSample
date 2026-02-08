@@ -6,28 +6,30 @@
 #include "GameplayEffectComponent.h"
 #include "RemoveOtherGameplayEffectComponent.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 struct FGameplayEffectRemovalInfo;
 
 /** Remove other Gameplay Effects based on certain conditions */
-UCLASS(DisplayName="Remove Other Effects")
-class GAMEPLAYABILITIES_API URemoveOtherGameplayEffectComponent : public UGameplayEffectComponent
+UCLASS(DisplayName="Remove Other Effects", MinimalAPI)
+class URemoveOtherGameplayEffectComponent : public UGameplayEffectComponent
 {
 	GENERATED_BODY()
 
 public:
 	/** Constructor to set EditorFriendlyName */
-	URemoveOtherGameplayEffectComponent();
+	UE_API URemoveOtherGameplayEffectComponent();
 
 	/**
 	 * We will re-run RemoveGameplayEffectQueries every time the owning Gameplay Effect is applied.
 	 */
-	virtual void OnGameplayEffectApplied(FActiveGameplayEffectsContainer& ActiveGEContainer, FGameplayEffectSpec& GESpec, FPredictionKey& PredictionKey) const override;
+	UE_API virtual void OnGameplayEffectApplied(FActiveGameplayEffectsContainer& ActiveGEContainer, FGameplayEffectSpec& GESpec, FPredictionKey& PredictionKey) const override;
 
 #if WITH_EDITOR
 	/**
 	 * Warn about periodic Gameplay Effects, that you probably instead want the OngoingTagRequirements in TagRequirementsGameplayEffectComponent
 	 */
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	UE_API virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif // WITH_EDITOR
 
 public:
@@ -35,3 +37,5 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = None)
 	TArray<FGameplayEffectQuery> RemoveGameplayEffectQueries;
 };
+
+#undef UE_API

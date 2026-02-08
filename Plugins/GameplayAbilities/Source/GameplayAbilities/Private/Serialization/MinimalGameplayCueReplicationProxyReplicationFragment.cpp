@@ -2,7 +2,6 @@
 
 #include "Serialization/MinimalGameplayCueReplicationProxyReplicationFragment.h"
 
-#if UE_WITH_IRIS
 
 #include "Engine/NetConnection.h"
 #include "Iris/ReplicationState/ReplicationStateDescriptor.h"
@@ -49,6 +48,17 @@ FMinimalGameplayCueReplicationProxyReplicationFragment::FMinimalGameplayCueRepli
 
 		SrcReplicationState = MakeUnique<FPropertyReplicationState>(InDescriptor);
 	}
+
+#if WITH_PUSH_MODEL
+	if (EnumHasAnyFlags(InDescriptor->Traits, EReplicationStateTraits::HasPushBasedDirtiness))
+	{
+		Traits |= EReplicationFragmentTraits::HasPushBasedDirtiness;
+		if (EnumHasAnyFlags(InDescriptor->Traits, EReplicationStateTraits::HasFullPushBasedDirtiness))
+		{
+			Traits |= EReplicationFragmentTraits::HasFullPushBasedDirtiness;
+		}
+	}
+#endif
 	
 	if (EnumHasAnyFlags(InTraits, EReplicationFragmentTraits::CanReceive))
 	{
@@ -90,7 +100,11 @@ void FMinimalGameplayCueReplicationProxyReplicationFragment::ApplyReplicatedStat
 
 bool FMinimalGameplayCueReplicationProxyReplicationFragment::PollReplicatedState(EReplicationFragmentPollFlags PollOption)
 {
-	if (EnumHasAnyFlags(PollOption, EReplicationFragmentPollFlags::PollAllState))
+	// We can early out if we are pushbased and not dirty for polling
+	const bool bPoll = EnumHasAnyFlags(PollOption, EReplicationFragmentPollFlags::PollAllState) ||
+	(EnumHasAnyFlags(PollOption, EReplicationFragmentPollFlags::PollDirtyState) && (!EnumHasAnyFlags(EReplicationFragmentTraits::HasPushBasedDirtiness, Traits) || SrcReplicationState->IsDirtyForPolling()));
+
+	if (bPoll)
 	{
 		const uint8* ExternalStateBuffer = reinterpret_cast<uint8*>(Owner) + ReplicationStateDescriptor->MemberProperties[0]->GetOffset_ForGC();
 		const FMinimalGameplayCueReplicationProxy* ExternalSourceState = reinterpret_cast<const FMinimalGameplayCueReplicationProxy*>(ExternalStateBuffer);
@@ -106,6 +120,11 @@ bool FMinimalGameplayCueReplicationProxyReplicationFragment::PollReplicatedState
 	}
 
 	return SrcReplicationState->IsDirty(0);
+}
+
+void FMinimalGameplayCueReplicationProxyReplicationFragment::CollectOwner(FReplicationStateOwnerCollector* Owners) const
+{
+	Owners->AddOwner(Owner);
 }
 
 void FMinimalGameplayCueReplicationProxyReplicationFragment::CallRepNotifies(FReplicationStateApplyContext& Context)
@@ -225,4 +244,3 @@ void FMinimalGameplayCueReplicationProxyReplicationFragment::CallRepNotify(FRepl
 
 }
 
-#endif

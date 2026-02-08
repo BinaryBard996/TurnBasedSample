@@ -77,7 +77,7 @@ public:
 
 private:
 
-	FORCEINLINE ElementType* AdvancePending(ElementType** Next)
+	inline ElementType* AdvancePending(ElementType** Next)
 	{
 		// Advance pending next only if this isnt the tail of the pending gameplay effect list
 		return (Next != const_cast<ElementType**>(Container.PendingGameplayEffectNext)) ? *Next : nullptr;

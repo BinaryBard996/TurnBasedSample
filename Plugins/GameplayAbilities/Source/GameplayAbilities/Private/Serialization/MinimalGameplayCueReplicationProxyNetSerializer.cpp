@@ -4,7 +4,6 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(MinimalGameplayCueReplicationProxyNetSerializer)
 
-#if UE_WITH_IRIS
 
 #include "GameplayCueInterface.h"
 #include "Iris/Core/NetObjectReference.h"
@@ -249,4 +248,3 @@ void FMinimalGameplayCueReplicationProxyNetSerializer::FNetSerializerRegistryDel
 
 }
 
-#endif // UE_WITH_IRIS

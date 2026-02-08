@@ -10,59 +10,61 @@
 #include "GameplayCue_Types.h"
 #include "GameplayCueNotify_Actor.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 /**
  *	An instantiated Actor that acts as a handler of a GameplayCue. Since they are instantiated, they can maintain state and tick/update every frame if necessary. 
  */
 
-UCLASS(Blueprintable, meta = (ShowWorldContextPin), hidecategories = (Replication))
-class GAMEPLAYABILITIES_API AGameplayCueNotify_Actor : public AActor
+UCLASS(Blueprintable, meta = (ShowWorldContextPin), hidecategories = (Replication), MinimalAPI)
+class AGameplayCueNotify_Actor : public AActor
 {
 	GENERATED_UCLASS_BODY()
 
 	/** Does this GameplayCueNotify handle this type of GameplayCueEvent? */
-	virtual bool HandlesEvent(EGameplayCueEvent::Type EventType) const;
+	UE_API virtual bool HandlesEvent(EGameplayCueEvent::Type EventType) const;
 
 	UFUNCTION()
-	virtual void OnOwnerDestroyed(AActor* DestroyedActor);
+	UE_API virtual void OnOwnerDestroyed(AActor* DestroyedActor);
 
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	UE_API virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
-	virtual void BeginPlay() override;
+	UE_API virtual void BeginPlay() override;
 
-	virtual void K2_DestroyActor() override;
-	virtual void Destroyed() override;
+	UE_API virtual void K2_DestroyActor() override;
+	UE_API virtual void Destroyed() override;
 
 #if WITH_EDITOR
-	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+	UE_API virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif
 
 public:
-	virtual void SetOwner( AActor* NewOwner ) override;
+	UE_API virtual void SetOwner( AActor* NewOwner ) override;
 
-	virtual void PostInitProperties() override;
+	UE_API virtual void PostInitProperties() override;
 
-	virtual void Serialize(FArchive& Ar) override;
+	UE_API virtual void Serialize(FArchive& Ar) override;
 
-	virtual void HandleGameplayCue(AActor* MyTarget, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API virtual void HandleGameplayCue(AActor* MyTarget, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Called when the GC is finished. It may be about to go back to the recyle pool, or it may be about to be destroyed. */
-	virtual void GameplayCueFinishedCallback();
+	UE_API virtual void GameplayCueFinishedCallback();
 
-	virtual bool GameplayCuePendingRemove();
+	UE_API virtual bool GameplayCuePendingRemove();
 
 	/** Called when returning to the recycled pool. Reset all state so that it can be reused. Return false if this class cannot be recycled. */
-	virtual bool Recycle();
+	UE_API virtual bool Recycle();
 
 	/** Called when we are about to reuse the GC. Should undo anything done in Recycle like hiding the actor */
-	virtual void ReuseAfterRecycle();
+	UE_API virtual void ReuseAfterRecycle();
 
 	/** Ends the gameplay cue: either destroying it or recycling it. You must call this manually only if you do not use bAutoDestroyOnRemove/AutoDestroyDelay  */
 	UFUNCTION(BlueprintCallable, Category="GameplayCueNotify", DisplayName="End (Recycle) GameplayCue", meta=(ScriptName="EndGameplayCue"))
-	virtual void K2_EndGameplayCue();
+	UE_API virtual void K2_EndGameplayCue();
 
 #if WITH_EDITOR
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	UE_API virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif // WITH_EDITOR
 
 	/** We will auto destroy (recycle) this GameplayCueActor when the OnRemove event fires (after OnRemove is called). */
@@ -83,23 +85,23 @@ public:
 
 	/** Generic Event Graph event that will get called for every event type */
 	UFUNCTION(BlueprintImplementableEvent, Category = "GameplayCueNotify", DisplayName = "HandleGameplayCue", meta=(ScriptName = "HandleGameplayCue"))
-	void K2_HandleGameplayCue(AActor* MyTarget, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
+	UE_API void K2_HandleGameplayCue(AActor* MyTarget, EGameplayCueEvent::Type EventType, const FGameplayCueParameters& Parameters);
 
 	/** Called when a GameplayCue is executed, this is used for instant effects or periodic ticks */
 	UFUNCTION(BlueprintNativeEvent, Category = "GameplayCueNotify")
-	bool OnExecute(AActor* MyTarget, const FGameplayCueParameters& Parameters);
+	UE_API bool OnExecute(AActor* MyTarget, const FGameplayCueParameters& Parameters);
 
 	/** Called when a GameplayCue with duration is first activated, this will only be called if the client witnessed the activation */
 	UFUNCTION(BlueprintNativeEvent, Category = "GameplayCueNotify", DisplayName="On Burst", meta=(ScriptName="OnBurst;OnActive"))
-	bool OnActive(AActor* MyTarget, const FGameplayCueParameters& Parameters);
+	UE_API bool OnActive(AActor* MyTarget, const FGameplayCueParameters& Parameters);
 
 	/** Called when a GameplayCue with duration is first seen as active, even if it wasn't actually just applied (Join in progress, etc) */
 	UFUNCTION(BlueprintNativeEvent, Category = "GameplayCueNotify", DisplayName="On Become Relevant", meta=(ScriptName="OnBecomeRelevant;WhileActive"))
-	bool WhileActive(AActor* MyTarget, const FGameplayCueParameters& Parameters);
+	UE_API bool WhileActive(AActor* MyTarget, const FGameplayCueParameters& Parameters);
 
 	/** Called when a GameplayCue with duration is removed */
 	UFUNCTION(BlueprintNativeEvent, Category = "GameplayCueNotify", DisplayName="On Cease Relevant", meta=(ScriptName="OnCeaseRelevant;OnRemove"))
-	bool OnRemove(AActor* MyTarget, const FGameplayCueParameters& Parameters);
+	UE_API bool OnRemove(AActor* MyTarget, const FGameplayCueParameters& Parameters);
 
 	/** Tag this notify is activated by */
 	UPROPERTY(EditDefaultsOnly, Category=GameplayCue, meta=(Categories="GameplayCue"))
@@ -166,15 +168,17 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 protected:
 	FTimerHandle FinishTimerHandle;
 
-	void ClearOwnerDestroyedDelegate();
+	UE_API void ClearOwnerDestroyedDelegate();
 
 	bool bHasHandledOnActiveEvent;
 	bool bHasHandledWhileActiveEvent;
 	bool bHasHandledOnRemoveEvent;
 
 private:
-	virtual void DeriveGameplayCueTagFromAssetName();
+	UE_API virtual void DeriveGameplayCueTagFromAssetName();
 
 	void AttachToOwnerIfNecessary();
 
 };
+
+#undef UE_API

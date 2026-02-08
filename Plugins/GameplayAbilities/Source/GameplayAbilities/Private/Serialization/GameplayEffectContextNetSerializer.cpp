@@ -5,7 +5,6 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayEffectContextNetSerializer)
 
-#if UE_WITH_IRIS
 
 #include "Engine/HitResult.h"
 #include "GameplayEffectTypes.h"
@@ -47,7 +46,11 @@ struct FGameplayEffectContextNetSerializer
 
 	struct FQuantizedType
 	{
-		alignas(16) uint8 EffectContext[128];
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+		alignas(16) uint8 EffectContext[176];
+#else
+		alignas(16) uint8 EffectContext[152];
+#endif
 		// 320 should be large enough and makes struct a multiple of 16 bytes
 		alignas(16) uint8 HitResult[320];
 		uint32 ReplicationFlags;
@@ -517,7 +520,11 @@ void FGameplayEffectContextNetSerializer::FNetSerializerRegistryDelegates::OnPos
 	// Setup serializer for most members. The HitResult requires special care and is handled later.
 	{
 		const UStruct* GEStruct = FGameplayEffectContextAccessorForNetSerializer::StaticStruct();
+#if UE_WITH_REMOTE_OBJECT_HANDLE
+		if (GEStruct->GetStructureSize() != 176 || GEStruct->GetMinAlignment() != 8)
+#else
 		if (GEStruct->GetStructureSize() != 128 || GEStruct->GetMinAlignment() != 8)
+#endif
 		{
 			LowLevelFatalError(TEXT("%s Size: %d Alignment: %d"), TEXT("FGameplayEffectContext layout has changed. Need to update FGameplayEffectContextNetSerializer."), GEStruct->GetStructureSize(), GEStruct->GetMinAlignment());
 		}
@@ -595,7 +602,6 @@ void FGameplayEffectContextNetSerializer::FNetSerializerRegistryDelegates::OnPos
 
 }
 
-#endif // UE_WITH_IRIS
 
 void FGameplayEffectContextAccessorForNetSerializer::CopyReplicatedFieldsFrom(const FGameplayEffectContextAccessorForNetSerializer& GE)
 {

@@ -6,8 +6,10 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitConfirm.generated.h"
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitConfirm : public UAbilityTask
+#define UE_API GAMEPLAYABILITIES_API
+
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitConfirm : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -15,19 +17,21 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitConfirm : public UAbilityTask
 	FGenericGameplayTaskDelegate	OnConfirm;
 
 	UFUNCTION()
-	void OnConfirmCallback(UGameplayAbility* InAbility);
+	UE_API void OnConfirmCallback(UGameplayAbility* InAbility);
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	/** Wait until the server confirms the use of this ability. This is used to gate predictive portions of the ability */
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_WaitConfirm* WaitConfirm(UGameplayAbility* OwningAbility);
+	static UE_API UAbilityTask_WaitConfirm* WaitConfirm(UGameplayAbility* OwningAbility);
 
 protected:
 
-	virtual void OnDestroy(bool AbilityEnded) override;
+	UE_API virtual void OnDestroy(bool AbilityEnded) override;
 
 	bool RegisteredCallback;
 
 	FDelegateHandle OnConfirmCallbackDelegateHandle;
 };
+
+#undef UE_API

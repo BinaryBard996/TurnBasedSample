@@ -6,14 +6,16 @@
 #include "Abilities/Tasks/AbilityTask.h"
 #include "AbilityTask_WaitConfirmCancel.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FWaitConfirmCancelDelegate);
 
 // Fixme: this name is conflicting with AbilityTask_WaitConfirm
 // UAbilityTask_WaitConfirmCancel = Wait for Targeting confirm/cancel
 // UAbilityTask_WaitConfirm = Wait for server to confirm ability activation
 
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_WaitConfirmCancel : public UAbilityTask
+UCLASS(MinimalAPI)
+class UAbilityTask_WaitConfirmCancel : public UAbilityTask
 {
 	GENERATED_UCLASS_BODY()
 
@@ -24,26 +26,28 @@ class GAMEPLAYABILITIES_API UAbilityTask_WaitConfirmCancel : public UAbilityTask
 	FWaitConfirmCancelDelegate	OnCancel;
 	
 	UFUNCTION()
-	void OnConfirmCallback();
+	UE_API void OnConfirmCallback();
 
 	UFUNCTION()
-	void OnCancelCallback();
+	UE_API void OnCancelCallback();
 
 	UFUNCTION()
-	void OnLocalConfirmCallback();
+	UE_API void OnLocalConfirmCallback();
 
 	UFUNCTION()
-	void OnLocalCancelCallback();
+	UE_API void OnLocalCancelCallback();
 
 	UFUNCTION(BlueprintCallable, meta=(HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "true", DisplayName="Wait for Confirm Input"), Category="Ability|Tasks")
-	static UAbilityTask_WaitConfirmCancel* WaitConfirmCancel(UGameplayAbility* OwningAbility);	
+	static UE_API UAbilityTask_WaitConfirmCancel* WaitConfirmCancel(UGameplayAbility* OwningAbility);	
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 protected:
 
-	virtual void OnDestroy(bool AbilityEnding) override;
+	UE_API virtual void OnDestroy(bool AbilityEnding) override;
 
 	bool RegisteredCallbacks;
 	
 };
+
+#undef UE_API

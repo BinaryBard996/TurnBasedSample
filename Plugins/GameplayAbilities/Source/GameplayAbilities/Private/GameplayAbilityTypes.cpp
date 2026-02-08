@@ -18,6 +18,8 @@
 
 //----------------------------------------------------------------------
 
+static TAutoConsoleVariable<bool> CVarRecordAbilityInstancesOnClientSpecUpdates(TEXT("AbilitySystem.RecordAbilityInstancesOnClientSpecUpdates"), true, TEXT("Set this to false if encountering issues with the logic for replicating ability instances in the spec's PreReplicatedRemove, PostReplicatedChange, or PostReplicatedAdd."));
+
 void FGameplayAbilityActorInfo::InitFromActor(AActor *InOwnerActor, AActor *InAvatarActor, UAbilitySystemComponent* InAbilitySystemComponent)
 {
 	check(InOwnerActor);
@@ -153,7 +155,7 @@ FGameplayAbilityActivationInfo::FGameplayAbilityActivationInfo(AActor* InActor)
 {
 	// On Init, we are either Authority or NonAuthority. We haven't been given a PredictionKey and we haven't been confirmed.
 	// NonAuthority essentially means 'I'm not sure what how I'm going to do this yet'.
-	ActivationMode = (InActor->GetLocalRole() == ROLE_Authority ? EGameplayAbilityActivationMode::Authority : EGameplayAbilityActivationMode::NonAuthority);
+	ActivationMode = ((InActor && InActor->GetLocalRole() == ROLE_Authority) ? EGameplayAbilityActivationMode::Authority : EGameplayAbilityActivationMode::NonAuthority);
 }
 
 void FGameplayAbilityActivationInfo::SetPredicting(FPredictionKey PredictionKey)
@@ -236,6 +238,18 @@ void FGameplayAbilitySpec::PreReplicatedRemove(const struct FGameplayAbilitySpec
 		UE_VLOG(InArraySerializer.Owner->GetOwner(), VLogAbilitySystem, Verbose, TEXT("OnRemoveAbility (Non-Auth): [%s] %s. Level: %d"), *Handle.ToString(), *GetNameSafe(Ability), Level);
 
 		FScopedAbilityListLock AblityListLock(*InArraySerializer.Owner);
+
+		if (CVarRecordAbilityInstancesOnClientSpecUpdates.GetValueOnGameThread())
+		{
+			for (UGameplayAbility* AbilityInstance : ReplicatedInstances)
+			{
+				if (AbilityInstance)
+				{
+					InArraySerializer.Owner->RemoveReplicatedInstancedAbility(AbilityInstance);
+				}
+			}
+		}
+		
 		InArraySerializer.Owner->OnRemoveAbility(*this);
 	}
 }
@@ -246,6 +260,17 @@ void FGameplayAbilitySpec::PostReplicatedChange(const struct FGameplayAbilitySpe
 	{
 		UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: AbilitySpecChanged (Non-Auth): [%s] %s. Level: %d"), *GetNameSafe(InArraySerializer.Owner->GetOwner()), *Handle.ToString(), *GetNameSafe(Ability), Level)
 		UE_VLOG(InArraySerializer.Owner->GetOwner(), VLogAbilitySystem, Verbose, TEXT("AbilitySpecChanged (Non-Auth): [%s] %s. Level: %d"), *Handle.ToString(), *GetNameSafe(Ability), Level);
+
+		if (CVarRecordAbilityInstancesOnClientSpecUpdates.GetValueOnGameThread())
+		{
+			for (UGameplayAbility* AbilityInstance : ReplicatedInstances)
+			{
+				if (AbilityInstance)
+				{
+					InArraySerializer.Owner->AddReplicatedInstancedAbility(AbilityInstance);
+				}
+			}
+		}
 	}
 }
 
@@ -256,6 +281,17 @@ void FGameplayAbilitySpec::PostReplicatedAdd(const struct FGameplayAbilitySpecCo
 		UE_LOG(LogAbilitySystem, Verbose, TEXT("%s: OnGiveAbility (Non-Auth): [%s] %s. Level: %d"), *GetNameSafe(InArraySerializer.Owner->GetOwner()), *Handle.ToString(), *GetNameSafe(Ability), Level)
 		UE_VLOG(InArraySerializer.Owner->GetOwner(), VLogAbilitySystem, Verbose, TEXT("OnGiveAbility (Non-Auth): [%s] %s. Level: %d"), *Handle.ToString(), *GetNameSafe(Ability), Level);
 
+		if (CVarRecordAbilityInstancesOnClientSpecUpdates.GetValueOnGameThread())
+		{
+			for (UGameplayAbility* AbilityInstance : ReplicatedInstances)
+			{
+				if (AbilityInstance)
+				{
+					InArraySerializer.Owner->AddReplicatedInstancedAbility(AbilityInstance);
+				}
+			}
+		}
+		
 		InArraySerializer.Owner->OnGiveAbility(*this);
 	}
 }
@@ -268,6 +304,11 @@ FString FGameplayAbilitySpec::GetDebugString()
 void FGameplayAbilitySpecContainer::RegisterWithOwner(UAbilitySystemComponent* InOwner)
 {
 	Owner = InOwner;
+}
+
+bool FGameplayAbilitySpecContainer::NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParms)
+{
+	return FFastArraySerializer::FastArrayDeltaSerialize<FGameplayAbilitySpec, FGameplayAbilitySpecContainer>(Items, DeltaParms, *this);
 }
 
 // ----------------------------------------------------

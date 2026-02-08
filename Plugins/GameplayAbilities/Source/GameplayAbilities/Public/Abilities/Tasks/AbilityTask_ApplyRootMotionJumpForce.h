@@ -7,6 +7,8 @@
 #include "Abilities/Tasks/AbilityTask_ApplyRootMotion_Base.h"
 #include "AbilityTask_ApplyRootMotionJumpForce.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UCharacterMovementComponent;
 class UCurveFloat;
 class UCurveVector;
@@ -19,8 +21,8 @@ class AActor;
 /**
  *	Applies force to character's movement
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_ApplyRootMotionJumpForce : public UAbilityTask_ApplyRootMotion_Base
+UCLASS(MinimalAPI)
+class UAbilityTask_ApplyRootMotionJumpForce : public UAbilityTask_ApplyRootMotion_Base
 {
 	GENERATED_UCLASS_BODY()
 
@@ -31,27 +33,27 @@ class GAMEPLAYABILITIES_API UAbilityTask_ApplyRootMotionJumpForce : public UAbil
 	FApplyRootMotionJumpForceDelegate OnLanded;
 
 	UFUNCTION(BlueprintCallable, Category="Ability|Tasks")
-	void Finish();
+	UE_API void Finish();
 
 	UFUNCTION()
-	void OnLandedCallback(const FHitResult& Hit);
+	UE_API void OnLandedCallback(const FHitResult& Hit);
 
 	/** Apply force to character's movement */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_ApplyRootMotionJumpForce* ApplyRootMotionJumpForce(UGameplayAbility* OwningAbility, FName TaskInstanceName, FRotator Rotation, float Distance, float Height, float Duration, float MinimumLandedTriggerTime,
+	static UE_API UAbilityTask_ApplyRootMotionJumpForce* ApplyRootMotionJumpForce(UGameplayAbility* OwningAbility, FName TaskInstanceName, FRotator Rotation, float Distance, float Height, float Duration, float MinimumLandedTriggerTime,
 		bool bFinishOnLanded, ERootMotionFinishVelocityMode VelocityOnFinishMode, FVector SetVelocityOnFinish, float ClampVelocityOnFinish, UCurveVector* PathOffsetCurve, UCurveFloat* TimeMappingCurve);
 
-	virtual void Activate() override;
+	UE_API virtual void Activate() override;
 
 	/** Tick function for this task, if bTickingTask == true */
-	virtual void TickTask(float DeltaTime) override;
+	UE_API virtual void TickTask(float DeltaTime) override;
 
-	virtual void PreDestroyFromReplication() override;
-	virtual void OnDestroy(bool AbilityIsEnding) override;
+	UE_API virtual void PreDestroyFromReplication() override;
+	UE_API virtual void OnDestroy(bool AbilityIsEnding) override;
 
 protected:
 
-	virtual void SharedInitAndApply() override;
+	UE_API virtual void SharedInitAndApply() override;
 
 	/**
 	* Work-around for OnLanded being called during bClientUpdating in movement replay code
@@ -59,7 +61,7 @@ protected:
 	* If we don't, we end up removing root motion from a replay root motion set instead
 	* of the real one
 	*/
-	void TriggerLanded();
+	UE_API void TriggerLanded();
 
 protected:
 
@@ -96,3 +98,5 @@ protected:
 
 	bool bHasLanded;
 };
+
+#undef UE_API

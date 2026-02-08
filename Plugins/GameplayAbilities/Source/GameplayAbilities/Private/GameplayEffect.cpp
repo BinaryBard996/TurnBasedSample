@@ -34,6 +34,7 @@
 #include "GameplayEffectComponents/RemoveOtherGameplayEffectComponent.h"
 #include "GameplayEffectComponents/TargetTagRequirementsGameplayEffectComponent.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
+#include "Iris/IrisConfig.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GameplayEffect)
 
@@ -55,15 +56,7 @@ const float UGameplayEffect::INVALID_LEVEL = FGameplayEffectConstants::INVALID_L
 
 DECLARE_CYCLE_STAT(TEXT("MakeQuery"), STAT_MakeGameplayEffectQuery, STATGROUP_AbilitySystem);
 
-#if WITH_EDITOR
-#define SCALABLEFLOAT_REPORTERROR_WITHPOSTLOAD(Scalable) \
-	if (Scalable.Curve.CurveTable) const_cast<UCurveTable*>(ToRawPtr(Scalable.Curve.CurveTable))->ConditionalPostLoad(); \
-	SCALABLEFLOAT_REPORTERROR(Scalable);
-
-#define SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(Scalable, PathNameString) \
-	if (Scalable.Curve.CurveTable) const_cast<UCurveTable*>(ToRawPtr(Scalable.Curve.CurveTable))->ConditionalPostLoad(); \
-	SCALABLEFLOAT_REPORTERROR_WITHPATHNAME(Scalable, PathNameString);
-#endif // WITH_EDITOR
+extern TAutoConsoleVariable<bool> CVarReplicateTagCountContainerWithIris;
 
 namespace UE::GameplayEffect
 {
@@ -81,6 +74,24 @@ namespace UE::GameplayEffect
 	int32 ActiveGameplayEffectReplicationFix = (int32)EActiveGameplayEffectFix::Current;
 	FAutoConsoleVariableRef CVarActiveGameplayEffectReplicationFix{ TEXT("AbilitySystem.Fix.ActiveGEReplicationFix"), ActiveGameplayEffectReplicationFix, TEXT("Experimental code mask for fixing Active Gameplay Effects (set to 0 to disable)"), ECVF_Default };
 	inline bool HasActiveGameplayEffectFix(EActiveGameplayEffectFix Flag) { return (ActiveGameplayEffectReplicationFix & static_cast<int32>(Flag)) != 0; }
+
+	enum class EActiveGameplayEffectOverflowBehavior : int32
+	{
+		None = 0,
+		HandleOverflowingStacksAlways		= (1 << 0), // Instead of checking the overflow if the ActiveGE stacks are at the limit, we check it whenever there are overflowing stacks
+		ApplyRemainingStacksWhenOverflow	= (1 << 1), // Instead of returning when we deny the application because of overflowing stacks, we apply the stacks up to the limit and ignore the surplus of stacks (stacks over the StackLimit)
+		
+		Legacy = None,							// Default behavior without those new changes
+		Current = HandleOverflowingStacksAlways | ApplyRemainingStacksWhenOverflow,
+	};
+
+	int32 ActiveGameplayEffectOverflowBehavior = (int32)EActiveGameplayEffectOverflowBehavior::Current;
+	FAutoConsoleVariableRef CVarActiveGameplayEffectOverflowBehavior{ TEXT("AbilitySystem.ActiveGameplayEffectOverflowBehavior"), ActiveGameplayEffectOverflowBehavior, TEXT("Change the behavior of overflowing stacks for Active Gameplay Effects. Use 0 to keep legacy functionality"), ECVF_Default };
+	inline bool HasActiveGameplayEffectOverflowBehavior(EActiveGameplayEffectOverflowBehavior Flag) { return (ActiveGameplayEffectOverflowBehavior & static_cast<int32>(Flag)) != 0; }
+
+	// Prediction of stacking gameplay effects
+	bool bAllowPredictiveApplicationOfStackingGameplayEffects = true;
+	FAutoConsoleVariableRef CVarAllowPredictiveStackingGEs{ TEXT("AbilitySystem.AllowPredictiveStackingGEs"), bAllowPredictiveApplicationOfStackingGameplayEffects, TEXT("Allow the predictive application of stacking gameplay effects. The removal of stacks is not predicted (Only application is)"), ECVF_Default };
 
 	TAutoConsoleVariable<int32> CVarGameplayEffectMaxVersion(TEXT("AbilitySystem.GameplayEffects.MaxVersion"), (int32)EGameplayEffectVersion::Current, TEXT("Override the Gameplay Effect Current Version (disabling upgrade code paths)"), ECVF_Default);
 
@@ -156,6 +167,7 @@ UGameplayEffect::UGameplayEffect(const FObjectInitializer& ObjectInitializer)
 	StackDurationRefreshPolicy = EGameplayEffectStackingDurationPolicy::RefreshOnSuccessfulApplication;
 	StackPeriodResetPolicy = EGameplayEffectStackingPeriodPolicy::ResetOnSuccessfulApplication;
 	bRequireModifierSuccessToTriggerCues = true;
+	bFactorInStackCount = true;
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 }
 
@@ -202,8 +214,8 @@ void UGameplayEffect::PostInitProperties()
 			}
 		}
 
-		// Catch any GEComponent configuration issues.  We usually want to do this late (after deserialization) for assets in PostLoad, but
-		// we've already determined this is a native class, so let's do that now (we won't get PostLoad).
+		// Catch any GEComponent configuration issues.  We usually want to do this late (after deserialization or BP compilation), but
+		// we've already determined this is a native class, so let's do that now (we won't get PostLoad or BP compilation).
 		FDataValidationContext DataValidationContext;
 		IsDataValid(DataValidationContext);
 
@@ -271,34 +283,49 @@ void UGameplayEffect::GetBlockedAbilityTags(FGameplayTagContainer& OutTagContain
 #if WITH_EDITOR
 EDataValidationResult UGameplayEffect::IsDataValid(FDataValidationContext& Context) const
 {
-	// Report these errors here & now, even though they're not using the DataValidationContext because
-	// these will show-up when saving/presubmit rather than during more extensive testing done at cook time.
-	DurationMagnitude.ReportErrors(GetPathName());
-	for (const FGameplayModifierInfo& CurModInfo : Modifiers)
-	{
-		CurModInfo.ModifierMagnitude.ReportErrors(GetPathName());
-	}
-
 	EDataValidationResult ValidationResult = Super::IsDataValid(Context);
 
-	if (ValidationResult != EDataValidationResult::Invalid)
+	// Report these errors here & now, even though they're not using the DataValidationContext because
+	// these will show-up when saving/presubmit rather than during more extensive testing done at cook time.
+	FString AssetPathName = GetPathName();
+
+	if (DurationPolicy == EGameplayEffectDurationType::HasDuration)
 	{
-		for (const UGameplayEffectComponent* GEComponent : GEComponents)
+		ValidationResult = CombineDataValidationResults(ValidationResult, DurationMagnitude.IsDataValid(Context, AssetPathName + TEXT(".DurationMagnitude")));
+		ValidationResult = CombineDataValidationResults(ValidationResult, MaxDurationMagnitude.IsDataValid(Context, AssetPathName + TEXT(".MaxDurationMagnitude")));
+	}
+
+	ValidationResult = CombineDataValidationResults(ValidationResult, Period.IsDataValid(Context, AssetPathName + TEXT(".Period")));
+
+	for (const FGameplayModifierInfo& CurModInfo : Modifiers)
+	{
+		ValidationResult = CombineDataValidationResults(ValidationResult, CurModInfo.ModifierMagnitude.IsDataValid(Context, AssetPathName + TEXT(".") + CurModInfo.Attribute.GetName()));
+	}
+
+	for (const UGameplayEffectComponent* GEComponent : GEComponents)
+	{
+		if (GEComponent)
 		{
-			if (GEComponent)
-			{
-				ValidationResult = GEComponent->IsDataValid(Context);
-				if (ValidationResult == EDataValidationResult::Invalid)
-				{
-					break;
-				}
-			}
-			else
-			{
-				Context.AddWarning(LOCTEXT("GEIsNull", "Null entry in GEComponents"));
-			}
+			ValidationResult = CombineDataValidationResults(ValidationResult, GEComponent->IsDataValid(Context));
+		}
+		else
+		{
+			Context.AddWarning(LOCTEXT("GEIsNull", "Null entry in GEComponents"));
 		}
 	}
+
+	if (DurationPolicy == EGameplayEffectDurationType::HasDuration && GetStackingType() != EGameplayEffectStackingType::None &&
+		StackDurationRefreshPolicy == EGameplayEffectStackingDurationPolicy::ExtendDuration && StackExpirationPolicy != EGameplayEffectStackingExpirationPolicy::ClearEntireStack)
+	{
+		Context.AddWarning(LOCTEXT("ExtendAndRefreshDurationBehaviour", "Stack Duration and Expiration Policy: When duration is extended on new stack but GE expiration does not clear the whole stack, duration will be refreshed using the total extended duration."));
+	}
+
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	if (DurationPolicy == EGameplayEffectDurationType::Instant && StackingType != EGameplayEffectStackingType::None)
+	{
+		Context.AddWarning(LOCTEXT("InstantNonStackingBehaviour", "Instant GameplayEffect's will not Stack."));
+	}
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 	TArray<FText> Warnings, Errors;
 	Context.SplitIssues(Warnings, Errors);
@@ -327,15 +354,9 @@ void UGameplayEffect::PostLoad()
 	OnGameplayEffectChanged();
 
 #if WITH_EDITOR
-	SCALABLEFLOAT_REPORTERROR_WITHPOSTLOAD(Period);
-
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	HasRemoveGameplayEffectsQuery = !RemoveGameplayEffectQuery.IsEmpty();
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
-
-	// Update the EditorStatusText
-	FDataValidationContext DataValidationContext;
-	IsDataValid(DataValidationContext);
 
 	// We're done loading (and therefore upgrading), boost the version.
 	SetVersion( static_cast<EGameplayEffectVersion>(UE::GameplayEffect::CVarGameplayEffectMaxVersion.GetValueOnGameThread()) );
@@ -892,6 +913,27 @@ void UGameplayEffect::PostEditChangeProperty(FPropertyChangedEvent& PropertyChan
 
 #endif // #if WITH_EDITOR
 
+EGameplayEffectStackingType UGameplayEffect::GetStackingType() const
+{
+	if (DurationPolicy == EGameplayEffectDurationType::Instant)
+	{
+		return EGameplayEffectStackingType::None;
+	}
+	
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	return StackingType;
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
+}
+
+#if WITH_EDITOR
+void UGameplayEffect::SetStackingType(EGameplayEffectStackingType InType)
+{
+	PRAGMA_DISABLE_DEPRECATION_WARNINGS
+	StackingType = InType;
+	PRAGMA_ENABLE_DEPRECATION_WARNINGS
+}
+#endif
+
 bool UGameplayEffect::CanApply(const FActiveGameplayEffectsContainer& ActiveGEContainer, const FGameplayEffectSpec& GESpec) const
 {
 	for (const UGameplayEffectComponent* GEComponent : GEComponents)
@@ -1060,6 +1102,17 @@ bool FAttributeBasedFloat::operator!=(const FAttributeBasedFloat& Other) const
 	return !(*this == Other);
 }
 
+#if WITH_EDITOR
+EDataValidationResult FAttributeBasedFloat::IsDataValid(FDataValidationContext& Context, const FString& PathName) const
+{
+	EDataValidationResult Result = Coefficient.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("Coefficient")));
+	Result = CombineDataValidationResults(Result, PreMultiplyAdditiveValue.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("PreMultiplyAdditiveValue"))));
+	Result = CombineDataValidationResults(Result, PostMultiplyAdditiveValue.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("PostMultiplyAdditiveValue"))));
+
+	return Result;
+}
+#endif
+
 // --------------------------------------------------------------------------------------------------------------------------------------------------------
 //
 //	FCustomCalculationBasedFloat
@@ -1107,6 +1160,17 @@ bool FCustomCalculationBasedFloat::operator!=(const FCustomCalculationBasedFloat
 {
 	return !(*this == Other);
 }
+
+#if WITH_EDITOR
+EDataValidationResult FCustomCalculationBasedFloat::IsDataValid(FDataValidationContext& Context, const FString& PathName) const
+{
+	EDataValidationResult Result = Coefficient.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("Coefficient")));
+	Result = CombineDataValidationResults(Result, PreMultiplyAdditiveValue.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("PreMultiplyAdditiveValue"))));
+	Result = CombineDataValidationResults(Result, PostMultiplyAdditiveValue.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("PostMultiplyAdditiveValue"))));
+
+	return Result;
+}
+#endif
 
 // --------------------------------------------------------------------------------------------------------------------------------------------------------
 //
@@ -1362,22 +1426,25 @@ FText FGameplayEffectModifierMagnitude::GetValueForEditorDisplay() const
 
 void FGameplayEffectModifierMagnitude::ReportErrors(const FString& PathName) const
 {
+	// Deprecated, use IsDataValid
+}
+
+EDataValidationResult FGameplayEffectModifierMagnitude::IsDataValid(FDataValidationContext& Context, const FString& PathName) const
+{
 	if (MagnitudeCalculationType == EGameplayEffectMagnitudeCalculation::ScalableFloat)
 	{
-		SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(ScalableFloatMagnitude, PathName);
+		return ScalableFloatMagnitude.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("ScalableFloatMagnitude")));
 	}
 	else if (MagnitudeCalculationType == EGameplayEffectMagnitudeCalculation::AttributeBased)
 	{
-		SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(AttributeBasedMagnitude.Coefficient, PathName);
-		SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(AttributeBasedMagnitude.PreMultiplyAdditiveValue, PathName);
-		SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(AttributeBasedMagnitude.PostMultiplyAdditiveValue, PathName);
+		return AttributeBasedMagnitude.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("AttributeBasedMagnitude")));
 	}
 	else if (MagnitudeCalculationType == EGameplayEffectMagnitudeCalculation::CustomCalculationClass)
 	{
-		SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(CustomMagnitude.Coefficient, PathName);
-		SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(CustomMagnitude.PreMultiplyAdditiveValue, PathName);
-		SCALABLEFLOAT_REPORTERROR_WITHPATHNAME_WITHPOSTLOAD(CustomMagnitude.PostMultiplyAdditiveValue, PathName);
+		return CustomMagnitude.IsDataValid(Context, FString::Printf(TEXT("%s.%s"), *PathName, TEXT("CustomMagnitude")));
 	}
+
+	return EDataValidationResult::Valid;
 }
 #endif // WITH_EDITOR
 
@@ -1394,7 +1461,7 @@ void FGameplayEffectExecutionDefinition::GetAttributeCaptureDefinitions(OUT TArr
 
 	if (CalculationClass)
 	{
-		const UGameplayEffectExecutionCalculation* CalculationCDO = Cast<UGameplayEffectExecutionCalculation>(CalculationClass->ClassDefaultObject);
+		const UGameplayEffectExecutionCalculation* CalculationCDO = Cast<UGameplayEffectExecutionCalculation>(CalculationClass->GetDefaultObject(false));
 		check(CalculationCDO);
 
 		OutCaptureDefs.Append(CalculationCDO->GetAttributeCaptureDefinitions());
@@ -1705,6 +1772,13 @@ void FGameplayEffectSpec::SetupAttributeCaptureDefinitions()
 		{
 			CapturedRelevantAttributes.AddCaptureDefinition(CurDurationCaptureDef);
 		}
+
+		CaptureDefs.Reset();
+		Def->MaxDurationMagnitude.GetAttributeCaptureDefinitions(CaptureDefs);
+		for (const FGameplayEffectAttributeCaptureDefinition& CurDurationCaptureDef : CaptureDefs)
+		{
+			CapturedRelevantAttributes.AddCaptureDefinition(CurDurationCaptureDef);
+		}
 	}
 
 	// Gather all capture definitions from modifiers
@@ -1768,30 +1842,40 @@ void FGameplayEffectSpec::RecaptureSourceActorTags()
 	EffectContext.GetOwnedGameplayTags(CapturedSourceTags.GetActorTags(), CapturedSourceTags.GetSpecTags());
 }
 
-bool FGameplayEffectSpec::AttemptCalculateDurationFromDef(OUT float& OutDefDuration) const
+bool FGameplayEffectSpec::AttemptCalculateDurationRelatedMagnitude(const FGameplayEffectModifierMagnitude& MagnitudeDef, OUT float& OutDurationValue) const
 {
-	check(Def);
-
 	bool bCalculatedDuration = true;
 
 	const EGameplayEffectDurationType DurType = Def->DurationPolicy;
 	if (DurType == EGameplayEffectDurationType::Infinite)
 	{
-		OutDefDuration = UGameplayEffect::INFINITE_DURATION;
+		OutDurationValue = UGameplayEffect::INFINITE_DURATION;
 	}
 	else if (DurType == EGameplayEffectDurationType::Instant)
 	{
-		OutDefDuration = UGameplayEffect::INSTANT_APPLICATION;
+		OutDurationValue = UGameplayEffect::INSTANT_APPLICATION;
 	}
 	else
 	{
 		// The last parameters (false, 1.f) are so that if SetByCaller hasn't been set yet, we don't warn and default
 		// to 1.f. This is so that the rest of the system doesn't treat the effect as an instant effect. 1.f is arbitrary
 		// and this makes it illegal to SetByCaller something into an instant effect.
-		bCalculatedDuration = Def->DurationMagnitude.AttemptCalculateMagnitude(*this, OutDefDuration, false, 1.f);
+		bCalculatedDuration = MagnitudeDef.AttemptCalculateMagnitude(*this, OutDurationValue, false, 1.f);
 	}
 
 	return bCalculatedDuration;
+}
+
+bool FGameplayEffectSpec::AttemptCalculateDurationFromDef(OUT float& OutDefDuration) const
+{
+	check(Def);
+	return AttemptCalculateDurationRelatedMagnitude(Def->DurationMagnitude, OutDefDuration);
+}
+
+bool FGameplayEffectSpec::AttemptCalculateMaxDurationFromDef(OUT float& OutDefMaxDuration) const
+{
+	check(Def);
+	return AttemptCalculateDurationRelatedMagnitude(Def->MaxDurationMagnitude, OutDefMaxDuration);
 }
 
 void FGameplayEffectSpec::SetLevel(float InLevel)
@@ -1883,13 +1967,17 @@ const FGameplayTagContainer& FGameplayEffectSpec::GetDynamicAssetTags() const
 
 float FGameplayEffectSpec::GetPeriod() const
 {
+	if (Def && Def->DurationPolicy == EGameplayEffectDurationType::Instant)
+	{
+		return UGameplayEffect::NO_PERIOD;
+	}
+	
 	return Period;
 }
 
 PRAGMA_DISABLE_DEPRECATION_WARNINGS
 void FGameplayEffectSpec::SetStackCount(int32 NewStackCount)
 {
-
 	StackCount = NewStackCount;
 }
 
@@ -1907,6 +1995,21 @@ float FGameplayEffectSpec::GetModifierMagnitude(int32 ModifierIdx, bool bFactorI
 
 	float ModMagnitude = SingleEvaluatedMagnitude;
 	if (bFactorInStackCount)
+	{
+		ModMagnitude = GameplayEffectUtilities::ComputeStackedModifierMagnitude(SingleEvaluatedMagnitude, GetStackCount(), Def->Modifiers[ModifierIdx].ModifierOp);
+	}
+
+	return ModMagnitude;
+}
+
+float FGameplayEffectSpec::GetModifierMagnitude(int32 ModifierIdx) const
+{
+	check(Modifiers.IsValidIndex(ModifierIdx) && Def && Def->Modifiers.IsValidIndex(ModifierIdx));
+
+	const float SingleEvaluatedMagnitude = Modifiers[ModifierIdx].GetEvaluatedMagnitude();
+
+	float ModMagnitude = SingleEvaluatedMagnitude;
+	if (Def->bFactorInStackCount)
 	{
 		ModMagnitude = GameplayEffectUtilities::ComputeStackedModifierMagnitude(SingleEvaluatedMagnitude, GetStackCount(), Def->Modifiers[ModifierIdx].ModifierOp);
 	}
@@ -2603,6 +2706,8 @@ FActiveGameplayEffect& FActiveGameplayEffect::operator=(FActiveGameplayEffect&& 
 	{
 		MostRecentArrayReplicationKey = Other.MostRecentArrayReplicationKey;
 	}
+	
+	bPostPredictObject = Other.bPostPredictObject;
 
 	return *this;
 }
@@ -2640,18 +2745,20 @@ FActiveGameplayEffect& FActiveGameplayEffect::operator=(const FActiveGameplayEff
 	{
 		MostRecentArrayReplicationKey = Other.MostRecentArrayReplicationKey;
 	}
+	
+	bPostPredictObject = Other.bPostPredictObject;
 
 	return *this;
 }
 
+// TurnBased Support
 float FActiveGameplayEffect::GetTimeRemaining(float WorldTime) const
 {
-	// TurnBased Support
 	if(Handle.GetOwningAbilitySystemComponent() && Handle.GetOwningAbilitySystemComponent()->IsTurnBased())
 	{
 		FAbilityTimerManager& AbilityTimerContainer = UAbilitySystemGlobals::Get().GetAbilityTimerManager();
 		float CurrentTurn = AbilityTimerContainer.GetAbilityCurrentTurn(Handle.GetOwningAbilitySystemComponent());
-			
+
 		float Duration = GetDuration();
 		return (Duration == FGameplayEffectConstants::INFINITE_DURATION ? -1.f : Duration - (CurrentTurn - StartWorldTime));
 	}
@@ -2660,8 +2767,8 @@ float FActiveGameplayEffect::GetTimeRemaining(float WorldTime) const
 		float Duration = GetDuration();
 		return (Duration == FGameplayEffectConstants::INFINITE_DURATION ? -1.f : Duration - (WorldTime - StartWorldTime));
 	}
-	// ~TurnBased Support
 }
+// ~TurnBased Support
 
 void FActiveGameplayEffect::CheckOngoingTagRequirements(const FGameplayTagContainer& OwnerTags, FActiveGameplayEffectsContainer& OwningContainer, bool bInvokeGameplayCueEvents)
 {
@@ -2731,11 +2838,11 @@ void FActiveGameplayEffect::PostReplicatedAdd(const struct FActiveGameplayEffect
 	}
 
 	bool ShouldInvokeGameplayCueEvents = true;
-	if (PredictionKey.IsLocalClientKey())
+	bPostPredictObject = PredictionKey.IsLocalClientKey();
+	if (bPostPredictObject)
 	{
 		// PredictionKey will only be valid on the client that predicted it. So if this has a valid PredictionKey, we can assume we already predicted it and shouldn't invoke GameplayCues.
 		// We may need to do more bookkeeping here in the future. Possibly give the predicted gameplayeffect a chance to pass something off to the new replicated gameplay effect.
-		
 		if (InArray.HasPredictedEffectWithPredictedKey(PredictionKey))
 		{
 			ShouldInvokeGameplayCueEvents = false;
@@ -2778,7 +2885,15 @@ void FActiveGameplayEffect::PostReplicatedAdd(const struct FActiveGameplayEffect
 	// Handles are not replicated, so create a new one.
 	Handle = FActiveGameplayEffectHandle::GenerateNewHandle(InArray.Owner);
 
-	UE_VLOG_UELOG(InArray.Owner->GetOwnerActor(), LogGameplayEffects, Verbose, TEXT("%s (Non-Auth): %s. Pending( OnActive: %d WhileActive: %d )"), ANSI_TO_TCHAR(__func__), *GetDebugString(), bPendingRepOnActiveGC, bPendingRepWhileActiveGC);
+	UE_VLOG_UELOG(
+		IsValid(InArray.Owner) ? InArray.Owner->GetOwnerActor() : nullptr,
+		LogGameplayEffects,
+		Verbose,
+		TEXT("%s (Non-Auth): %s. Pending( OnActive: %d WhileActive: %d )"),
+		ANSI_TO_TCHAR(__func__),
+		*GetDebugString(),
+		bPendingRepOnActiveGC,
+		bPendingRepWhileActiveGC);
 
 	// Do stuff for adding GEs (add mods, tags, *invoke callbacks*).  But do NOT invoke the GameplayCues as we don't know if this GE ends up inhibited or not (thus the bPendingRepOnActiveGC variables).
 	constexpr bool bInvokeGameplayCueEvents = false;
@@ -2967,7 +3082,7 @@ void FActiveGameplayEffectsContainer::PredictivelyExecuteEffectSpec(FGameplayEff
 			}
 		}
 
-		FGameplayModifierEvaluatedData EvalData(ModDef.Attribute, ModDef.ModifierOp, SpecToUse.GetModifierMagnitude(ModIdx, true));
+		FGameplayModifierEvaluatedData EvalData(ModDef.Attribute, ModDef.ModifierOp, SpecToUse.GetModifierMagnitude(ModIdx));
 		ModifierSuccessfullyExecuted |= InternalExecuteMod(SpecToUse, EvalData);
 	}
 
@@ -3098,7 +3213,7 @@ void FActiveGameplayEffectsContainer::ExecuteActiveEffectsFrom(FGameplayEffectSp
 			}
 		}
 		
-		FGameplayModifierEvaluatedData EvalData(ModDef.Attribute, ModDef.ModifierOp, SpecToUse.GetModifierMagnitude(ModIdx, true));
+		FGameplayModifierEvaluatedData EvalData(ModDef.Attribute, ModDef.ModifierOp, SpecToUse.GetModifierMagnitude(ModIdx));
 		ModifierSuccessfullyExecuted |= InternalExecuteMod(SpecToUse, EvalData);
 	}
 
@@ -3433,6 +3548,29 @@ void FActiveGameplayEffectsContainer::OnStackCountChange(FActiveGameplayEffect& 
 	ActiveEffect.EventSet.OnStackChanged.Broadcast(ActiveEffect.Handle, ActiveEffect.Spec.GetStackCount(), OldStackCount);
 }
 
+void FActiveGameplayEffectsContainer::OnPredictiveGameplayEffectStackCaughtUp(FActiveGameplayEffectHandle Handle)
+{
+	const FActiveGameplayEffect* ActiveGE = GetActiveGameplayEffect(Handle);
+	if (ActiveGE)
+	{
+		const int32 CurrentStackCount = ActiveGE->Spec.GetStackCount();
+		const int32 LastServerReplicatedStackCount = ActiveGE->ClientCachedStackCount;
+
+		// If there is a delta then remove the predicted stacks. 
+		const int32 DeltaStacks = CurrentStackCount - LastServerReplicatedStackCount;
+		if (DeltaStacks != 0)
+		{
+			// We can't predictively remove stacks, so this should always be true
+			ensure(CurrentStackCount > LastServerReplicatedStackCount);
+
+			// We can assume that if the StackCount is different from the ClientCachedStackedCount then the application of the new stacks has been rejected.
+			// Otherwise, PostReplicatedChange would have been called first and would have set the new StackCount and its ClientCachedStackCount
+			Owner->RemoveActiveGameplayEffect_AllowClientRemoval(Handle, DeltaStacks);
+			UE_LOG(LogGameplayEffects, Log, TEXT("Removing local predicted stacks [%d] in %hs. Last Client's stack count [%d] and Current stack count [%d]"), DeltaStacks, __func__, LastServerReplicatedStackCount, CurrentStackCount);
+		}
+	}
+}
+
 /** Called when the duration or starttime of an AGE has changed */
 void FActiveGameplayEffectsContainer::OnDurationChange(FActiveGameplayEffect& Effect)
 {
@@ -3496,7 +3634,7 @@ FActiveGameplayEffect* FActiveGameplayEffectsContainer::FindStackableActiveGamep
 {
 	FActiveGameplayEffect* StackableGE = nullptr;
 	const UGameplayEffect* GEDef = Spec.Def;
-	EGameplayEffectStackingType StackingType = GEDef->StackingType;
+	EGameplayEffectStackingType StackingType = GEDef->GetStackingType();
 
 	if ((StackingType != EGameplayEffectStackingType::None) && (GEDef->DurationPolicy != EGameplayEffectDurationType::Instant))
 	{
@@ -3518,10 +3656,15 @@ FActiveGameplayEffect* FActiveGameplayEffectsContainer::FindStackableActiveGamep
 	return StackableGE;
 }
 
-bool FActiveGameplayEffectsContainer::HandleActiveGameplayEffectStackOverflow(const FActiveGameplayEffect& ActiveStackableGE, const FGameplayEffectSpec& OldSpec, const FGameplayEffectSpec& OverflowingSpec)
+bool FActiveGameplayEffectsContainer::HandleActiveGameplayEffectStackOverflow(const FActiveGameplayEffect& ActiveStackableGE, const FGameplayEffectSpec& OldSpec, const FGameplayEffectSpec& OverflowingSpec, FPredictionKey PredictionKey)
 {
 	const UGameplayEffect* StackedGE = OldSpec.Def;
 	const bool bAllowOverflowApplication = !(StackedGE->bDenyOverflowApplication);
+	
+	// allow refreshing duration and context if the new application would cause us to overflow but we're not currently at max stacks
+	using namespace UE::GameplayEffect;
+	const bool bAtStackLimit = OldSpec.GetStackCount() == StackedGE->StackLimitCount;
+	const bool bRefreshToLimit = !bAtStackLimit && !StackedGE->bClearStackOnOverflow && HasActiveGameplayEffectOverflowBehavior(EActiveGameplayEffectOverflowBehavior::ApplyRemainingStacksWhenOverflow);
 
 	for (TSubclassOf<UGameplayEffect> OverflowEffect : StackedGE->OverflowEffects)
 	{
@@ -3529,16 +3672,20 @@ bool FActiveGameplayEffectsContainer::HandleActiveGameplayEffectStackOverflow(co
 		{
 			FGameplayEffectSpec NewGESpec;
 			NewGESpec.InitializeFromLinkedSpec(CDO, OverflowingSpec);
-			Owner->ApplyGameplayEffectSpecToSelf(NewGESpec);
+			Owner->ApplyGameplayEffectSpecToSelf(NewGESpec, PredictionKey);
 		}
 	}
 
-	if (!bAllowOverflowApplication && StackedGE->bClearStackOnOverflow)
+	// don't allow clients to predict removal of active effects due to overflow.
+	if (!PredictionKey.IsLocalClientKey() || IsNetAuthority())
 	{
-		Owner->RemoveActiveGameplayEffect(ActiveStackableGE.Handle);
+		if (!bAllowOverflowApplication && StackedGE->bClearStackOnOverflow)
+		{
+			Owner->RemoveActiveGameplayEffect(ActiveStackableGE.Handle);
+		}
 	}
 
-	return bAllowOverflowApplication;
+	return bAllowOverflowApplication || bRefreshToLimit;
 }
 
 bool FActiveGameplayEffectsContainer::ShouldUseMinimalReplication()
@@ -3657,6 +3804,9 @@ float FActiveGameplayEffectsContainer::GetGameplayEffectMagnitude(FActiveGamepla
 					return ModSpec.GetEvaluatedMagnitude();
 				}
 			}
+			
+			UE_LOG(LogGameplayEffects, Warning, TEXT("GetGameplayEffectMagnitude with Handle: %s did not find Attribute %s in the modifiers."), *Handle.ToString(), *Attribute.GetName());
+			return -1.f;
 		}
 	}
 
@@ -3758,6 +3908,9 @@ void FActiveGameplayEffectsContainer::InternalUpdateNumericalAttribute(FGameplay
 	
 	if (!bFromRecursiveCall)
 	{
+		// Grab the actual value to broadcast from the attribute since SetCurrentValue could have been overriden
+		NewValue = Owner->GetNumericAttribute(Attribute);
+
 		// We should only have one: either cached CurrentModcallbackData, or explicit callback data passed directly in.
 		if (ModData && CurrentModcallbackData)
 		{
@@ -3841,7 +3994,7 @@ void FActiveGameplayEffectsContainer::SetAttributeBaseValue(FGameplayAttribute A
 		InternalUpdateNumericalAttribute(Attribute, NewBaseValue, nullptr);
 	}
 
-	Set->PostAttributeBaseChange(Attribute, OldBaseValue, NewBaseValue);
+	Set->PostAttributeBaseChange(Attribute, OldBaseValue, GetAttributeBaseValue(Attribute));
 }
 
 float FActiveGameplayEffectsContainer::GetAttributeBaseValue(FGameplayAttribute Attribute) const
@@ -3996,23 +4149,38 @@ FActiveGameplayEffect* FActiveGameplayEffectsContainer::ApplyGameplayEffectSpec(
 	FActiveGameplayEffect* AppliedActiveGE = nullptr;
 	FActiveGameplayEffect* ExistingStackableGE = FindStackableActiveGameplayEffect(Spec);
 
-	bool bSetDuration = true;
-	bool bSetPeriod = true;
+	// Whether to (re)schedule the duration check with world timer manager
+	bool bSetDurationTimer = true;
+	// Whether to (re)schedule the periodic tick with world timer manager
+	bool bSetPeriodTimer = true;
+
 	int32 StartingStackCount = 0;
 	int32 NewStackCount = 0;
+
+	// If we're applying a stack and the GE is configured to extend duration, 
+	// we will remember how much duration was left of the existing application.
+	float CarryOverDuration = 0.0f;
+
+	// For HasActiveGameplayEffectOverflowBehavior() 
+	// and EActiveGameplayEffectOverflowBehavior
+	// and bAllowPredictiveApplicationOfStackingGameplayEffects
+	using namespace UE::GameplayEffect;
 
 	// Check if there's an active GE this application should stack upon
 	if (ExistingStackableGE)
 	{
-		if (!IsNetAuthority())
+		if (bAllowPredictiveApplicationOfStackingGameplayEffects == false)
 		{
-			// Don't allow prediction of stacking for now
-			return nullptr;
-		}
-		else
-		{
-			// Server invalidates the prediction key for this GE since client is not predicting it
-			InPredictionKey = FPredictionKey();
+			if (!IsNetAuthority())
+			{
+				// Don't apply the stacking GE if we don't allow it
+				return nullptr;
+			}
+			else
+			{
+				// Server invalidates the prediction key for this GE since client is not predicting it
+				InPredictionKey = FPredictionKey();
+			}
 		}
 
 		bFoundExistingStackableGE = true;
@@ -4026,17 +4194,24 @@ FActiveGameplayEffect* FActiveGameplayEffectsContainer::ApplyGameplayEffectSpec(
 		// How to apply multiple stacks at once? What if we trigger an overflow which can reject the application?
 		// We still want to apply the stacks that didn't push us over, but we also want to call HandleActiveGameplayEffectStackOverflow.
 		
-		// For now: call HandleActiveGameplayEffectStackOverflow only if we are ALREADY at the limit. Else we just clamp stack limit to max.
-		if (ExistingSpec.GetStackCount() == ExistingSpec.Def->StackLimitCount)
+		NewStackCount = ExistingSpec.GetStackCount() + Spec.GetStackCount();
+
+		// Legacy behavior: call HandleActiveGameplayEffectStackOverflow only if we are ALREADY at the limit.
+		const bool bStackCountAtLimit = ExistingSpec.GetStackCount() == ExistingSpec.Def->StackLimitCount;
+
+		// In this path, we call HandleActiveGameplayEffectStackOverflow if we have any overflowing stacks. 
+		const bool bWillOverflowStacks = NewStackCount > ExistingSpec.Def->StackLimitCount && HasActiveGameplayEffectOverflowBehavior(EActiveGameplayEffectOverflowBehavior::HandleOverflowingStacksAlways);
+
+		// We call HandleActiveGameplayEffectStackOverflow if we want to apply the remaining stacks up to the stack limit or for legacy behavior
+		if (bStackCountAtLimit || bWillOverflowStacks)
 		{
-			if (!HandleActiveGameplayEffectStackOverflow(*ExistingStackableGE, ExistingSpec, Spec))
+			if (!HandleActiveGameplayEffectStackOverflow(*ExistingStackableGE, ExistingSpec, Spec, InPredictionKey))
 			{
 				UE_VLOG_UELOG(Owner, LogGameplayEffects, Log, TEXT("Application of %s denied (StackLimit)"), *Spec.ToSimpleString());
 				return nullptr;
 			}
 		}
 		
-		NewStackCount = ExistingSpec.GetStackCount() + Spec.GetStackCount();
 		if (ExistingSpec.Def->StackLimitCount > 0)
 		{
 			NewStackCount = FMath::Min(NewStackCount, ExistingSpec.Def->StackLimitCount);
@@ -4051,6 +4226,13 @@ FActiveGameplayEffect* FActiveGameplayEffectsContainer::ApplyGameplayEffectSpec(
 		// back to this later.
 		ensureMsgf(ExistingSpec.DynamicGrantedTags == Spec.DynamicGrantedTags, TEXT("While adding a stack of the gameplay effect: %s, the old stack and the new application had different dynamically granted tags, which is currently not resolved properly!"), *Spec.Def->GetName());
 		ensureMsgf(ExistingSpec.GetDynamicAssetTags() == Spec.GetDynamicAssetTags(), TEXT("While adding a stack of the gameplay effect: %s, the old stack and the new application had different dynamic asset tags, which is currently not resolved properly! Existing: %s. New: %s"), *Spec.Def->GetName(), *ExistingSpec.GetDynamicAssetTags().ToStringSimple(), *Spec.GetDynamicAssetTags().ToStringSimple());
+
+		// If GE's stack duration policy is configured to extend duration, the remaining time and the new spec's time will be summed.
+		// Store the remaining time for later use. Cache it now before overwriting existing spec's duration.
+		if (ExistingSpec.Def->StackDurationRefreshPolicy == EGameplayEffectStackingDurationPolicy::ExtendDuration)
+		{
+			CarryOverDuration = ExistingStackableGE->GetTimeRemaining(GetWorldTime());
+		}
 
 PRAGMA_DISABLE_DEPRECATION_WARNINGS
 		// We only grant abilities on the first apply. So we *dont* want the new spec's GrantedAbilitySpecs list
@@ -4069,19 +4251,21 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 		const UGameplayEffect* GEDef = ExistingSpec.Def;
 
 		// Make sure the GE actually wants to refresh its duration
-		if (GEDef->StackDurationRefreshPolicy == EGameplayEffectStackingDurationPolicy::NeverRefresh)
+		// Client's predicted GE will be combined with the existing GE and we don't want to set any duration timer in this case
+		if ((InPredictionKey.IsLocalClientKey() && InPredictionKey.WasLocallyGenerated()) || GEDef->StackDurationRefreshPolicy == EGameplayEffectStackingDurationPolicy::NeverRefresh)
 		{
-			bSetDuration = false;
+			bSetDurationTimer = false;
 		}
 		else
 		{
+			// Duration is going to be refreshed. Rebase the active GE's start time.
 			RestartActiveGameplayEffectDuration(*ExistingStackableGE);
 		}
 
 		// Make sure the GE actually wants to reset its period
 		if (GEDef->StackPeriodResetPolicy == EGameplayEffectStackingPeriodPolicy::NeverReset)
 		{
-			bSetPeriod = false;
+			bSetPeriodTimer = false;
 		}
 	}
 	else
@@ -4196,14 +4380,27 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 	const float DurationBaseValue = AppliedEffectSpec.GetDuration();
 
-	// TurnBased Support
-	const bool bTurnBased = Owner->IsTurnBased();
-	// ~TurnBased Support
-
 	// Calculate Duration mods if we have a real duration
 	if (DurationBaseValue > 0.f)
 	{
 		float FinalDuration = AppliedEffectSpec.CalculateModifiedDuration();
+
+		// If GE is configured to extend duration when stacking, add the remaining time of existing effect to the new final duration
+		if (CarryOverDuration > 0.0f)
+		{
+			FinalDuration += CarryOverDuration;
+		}
+
+		// Calculate max duration from the spec. If the new spec provides a different value for max duration, for example 
+		// through different SetByCaller magnitudes, then that takes precedence over the previously applied spec's.
+		float SpecMaxDuration = 0.0f;
+		if (!AppliedEffectSpec.AttemptCalculateMaxDurationFromDef(SpecMaxDuration))
+		{
+			if (AppliedEffectSpec.Def->MaxDurationMagnitude.GetMagnitudeCalculationType() == EGameplayEffectMagnitudeCalculation::SetByCaller)
+			{
+				AppliedEffectSpec.Def->MaxDurationMagnitude.AttemptCalculateMagnitude(AppliedEffectSpec, SpecMaxDuration);
+			}
+		}
 
 		// We cannot mod ourselves into an instant or infinite duration effect
 		if (FinalDuration <= 0.f)
@@ -4211,19 +4408,33 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			UE_LOG(LogGameplayEffects, Error, TEXT("ActiveGE %s Duration was modified to %.2f. Clamping to 0.1s duration."), *AppliedActiveGE->GetDebugString(), FinalDuration);
 			FinalDuration = 0.1f;
 		}
+		else if (SpecMaxDuration > 0.0f && FinalDuration > SpecMaxDuration)
+		{
+			UE_LOG(LogGameplayEffects, Verbose, TEXT("ActiveGE %s Duration (%.2f) exceeds MaxDuration (%.2f). Clamping to MaxDuration."), *AppliedActiveGE->GetDebugString(), FinalDuration, SpecMaxDuration);
+			FinalDuration = SpecMaxDuration;
+		}
 
-		AppliedEffectSpec.SetDuration(FinalDuration, true);
+		// Store the final calculated duration on the applied spec
+		AppliedEffectSpec.SetDuration(FinalDuration, /*bLockDuration=*/false);
+
+		// Broadcast latest duration
+		OnDurationChange(*AppliedActiveGE);
 
 		// Register duration callbacks with the timer manager
-		if (Owner && bSetDuration)
+		if (Owner && bSetDurationTimer)
 		{
+			// TurnBased Support
+			const bool bTurnBased = Owner->IsTurnBased();
+			// ~TurnBased Support
+
+			FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::CheckDurationExpired, AppliedActiveGE->Handle);
+
 			// TurnBased Support
 			if(!bTurnBased)
 			{
 				FTimerManager& TimerManager = Owner->GetWorld()->GetTimerManager();
-				FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::CheckDurationExpired, AppliedActiveGE->Handle);
 				TimerManager.SetTimer(AppliedActiveGE->DurationHandle, Delegate, FinalDuration, false);
-				if (!ensureMsgf(AppliedActiveGE->DurationHandle.IsValid(), TEXT("Invalid Duration Handle after attempting to set duration for GE (%s) @ %.2f"), 
+				if (!ensureMsgf(AppliedActiveGE->DurationHandle.IsValid(), TEXT("Invalid Duration Handle after attempting to set duration for GE (%s) @ %.2f"),
 					*AppliedActiveGE->GetDebugString(), FinalDuration))
 				{
 					// Force this off next frame
@@ -4233,9 +4444,8 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			else
 			{
 				FAbilityTimerManager& AbilityTimerManager = UAbilitySystemGlobals::Get().GetAbilityTimerManager();
-				FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::CheckDurationExpired, AppliedActiveGE->Handle);
 				AbilityTimerManager.SetAbilityTimer(Owner, AppliedActiveGE->DurationHandle, Delegate, FinalDuration, false);
-				if (!ensureMsgf(AppliedActiveGE->DurationHandle.IsValid(), TEXT("Invalid Duration Handle after attempting to set duration for GE (%s) @ %.2f"), 
+				if (!ensureMsgf(AppliedActiveGE->DurationHandle.IsValid(), TEXT("Invalid Duration Handle after attempting to set duration for GE (%s) @ %.2f"),
 					*AppliedActiveGE->GetDebugString(), FinalDuration))
 				{
 					// Force this off next frame
@@ -4247,26 +4457,15 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	}
 	
 	// Register period callbacks with the timer manager
-	if (bSetPeriod && Owner && (AppliedEffectSpec.GetPeriod() > UGameplayEffect::NO_PERIOD))
+	if (bSetPeriodTimer && Owner && (AppliedEffectSpec.GetPeriod() > UGameplayEffect::NO_PERIOD))
 	{
-		// TurnBased Support
-		if(!bTurnBased)
-		{
-			FAbilityTimerManager& AbilityTimerManager = UAbilitySystemGlobals::Get().GetAbilityTimerManager();
-			FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::ExecutePeriodicEffect, AppliedActiveGE->Handle);
-			// The timer manager moves things from the pending list to the active list after checking the active list on the first tick so we need to execute here
-			if (AppliedEffectSpec.Def->bExecutePeriodicEffectOnApplication)
-			{
-				AbilityTimerManager.SetAbilityTimerForNextTick(Delegate);
-			}
+		FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::ExecutePeriodicEffect, AppliedActiveGE->Handle);
 
-			AbilityTimerManager.SetAbilityTimer(Owner, AppliedActiveGE->PeriodHandle, Delegate, AppliedEffectSpec.GetPeriod(), true);
-		}
-		else
+		// TurnBased Support
+		if(!Owner->IsTurnBased())
 		{
 			FTimerManager& TimerManager = Owner->GetWorld()->GetTimerManager();
-			FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::ExecutePeriodicEffect, AppliedActiveGE->Handle);
-			
+
 			// The timer manager moves things from the pending list to the active list after checking the active list on the first tick so we need to execute here
 			if (AppliedEffectSpec.Def->bExecutePeriodicEffectOnApplication)
 			{
@@ -4274,6 +4473,18 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			}
 
 			TimerManager.SetTimer(AppliedActiveGE->PeriodHandle, Delegate, AppliedEffectSpec.GetPeriod(), true);
+		}
+		else
+		{
+			FAbilityTimerManager& AbilityTimerManager = UAbilitySystemGlobals::Get().GetAbilityTimerManager();
+
+			// The timer manager moves things from the pending list to the active list after checking the active list on the first tick so we need to execute here
+			if (AppliedEffectSpec.Def->bExecutePeriodicEffectOnApplication)
+			{
+				AbilityTimerManager.SetAbilityTimerForNextTick(Delegate);
+			}
+
+			AbilityTimerManager.SetAbilityTimer(Owner, AppliedActiveGE->PeriodHandle, Delegate, AppliedEffectSpec.GetPeriod(), true);
 		}
 		// ~TurnBased Support
 	}
@@ -4288,8 +4499,24 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 		MarkArrayDirty();
 
 		// Once replicated state has caught up to this prediction key, we must remove this gameplay effect.
-		InPredictionKey.NewRejectOrCaughtUpDelegate(FPredictionKeyEvent::CreateUObject(Owner, &UAbilitySystemComponent::RemoveActiveGameplayEffect_AllowClientRemoval, AppliedActiveGE->Handle, -1));
-		
+		// This is either not a stackable GE or the first application of a stackable GE 
+		if (ExistingStackableGE == nullptr)
+		{
+			// Once replicated state has caught up to this prediction key, we must remove this gameplay effect.
+			constexpr int32 RemoveAllStacks = -1;
+			InPredictionKey.NewCaughtUpDelegate().BindUObject(Owner, &UAbilitySystemComponent::OnCaughtUpActiveGameplayEffect, AppliedActiveGE->Handle, RemoveAllStacks);
+			InPredictionKey.NewRejectedDelegate().BindUObject(Owner, &UAbilitySystemComponent::OnRejectedActiveGameplayEffect, AppliedActiveGE->Handle, RemoveAllStacks);
+		}
+		else // We have an existing Stackable GE
+		{
+			// Once replicated state has caught up to this prediction key, we need to readjust the stack count or at least make sure it has been handled in PostReplicatedChange
+			InPredictionKey.NewRejectOrCaughtUpDelegate(FPredictionKeyEvent::CreateUObject(Owner, &UAbilitySystemComponent::OnPredictiveGameplayEffectStackCaughtUp, AppliedActiveGE->Handle));
+
+			// @note: This should be the number of stacks that would have been removed if the application is rejected but we would have been relying on the FPredictionKey reject delegate.
+			// However the reject delegate is not guaranteed to be called with 'bad' network conditions and we would end up with too many stacks on the client.
+			const int32 StacksAppliedWithinThisApplication = FMath::Min(Spec.GetStackCount(), Spec.Def->StackLimitCount - StartingStackCount);
+			UE_LOG(LogGameplayEffects, Log, TEXT("This Gameplay Effect [%s] has applied [%d] stacks when it had to stack."), *AppliedActiveGE->GetDebugString(), StacksAppliedWithinThisApplication);
+		}
 	}
 
 	// @note @todo: This is currently assuming (potentially incorrectly) that the inhibition state of a stacked GE won't change
@@ -4304,7 +4531,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 		const bool bInvokeGameplayCueEvents = (Spec.Def->DurationPolicy != EGameplayEffectDurationType::Instant);
 		InternalOnActiveGameplayEffectAdded(*AppliedActiveGE, bInvokeGameplayCueEvents);
 	}
-
+	
 	return AppliedActiveGE;
 }
 
@@ -4332,7 +4559,10 @@ void FActiveGameplayEffectsContainer::InternalOnActiveGameplayEffectAdded(FActiv
 	Effect.bIsInhibited = true; // Effect has to start inhibited, so our call to Inhibit will trigger if we should be active
 
 	FActiveGameplayEffectHandle EffectHandle = Effect.Handle;
-	Owner->SetActiveGameplayEffectInhibit(MoveTemp(EffectHandle), !bActive, bInvokeGameplayCueEvents);
+	if (IsValid(Owner))
+	{
+		Owner->SetActiveGameplayEffectInhibit(MoveTemp(EffectHandle), !bActive, bInvokeGameplayCueEvents);
+	}
 }
 
 void FActiveGameplayEffectsContainer::AddActiveGameplayEffectGrantedTagsAndModifiers(FActiveGameplayEffect& Effect, bool bInvokeGameplayCueEvents)
@@ -4340,6 +4570,12 @@ void FActiveGameplayEffectsContainer::AddActiveGameplayEffectGrantedTagsAndModif
 	if (Effect.Spec.Def == nullptr)
 	{
 		UE_LOG(LogGameplayEffects, Error, TEXT("AddActiveGameplayEffectGrantedTagsAndModifiers called with null Def!"));
+		return;
+	}
+
+	if (!Owner)
+	{
+		UE_LOG(LogGameplayEffects, Error, TEXT("AddActiveGameplayEffectGrantedTagsAndModifiers called with null Owner!"));
 		return;
 	}
 
@@ -4360,7 +4596,7 @@ void FActiveGameplayEffectsContainer::AddActiveGameplayEffectGrantedTagsAndModif
 			const FGameplayModifierInfo &ModInfo = Effect.Spec.Def->Modifiers[ModIdx];
 
 			// skip over any modifiers for attributes that we don't have
-			if (!Owner || Owner->HasAttributeSetForAttribute(ModInfo.Attribute) == false)
+			if (Owner->HasAttributeSetForAttribute(ModInfo.Attribute) == false)
 			{
 				continue;
 			}
@@ -4368,7 +4604,7 @@ void FActiveGameplayEffectsContainer::AddActiveGameplayEffectGrantedTagsAndModif
 			// Note we assume the EvaluatedMagnitude is up to do. There is no case currently where we should recalculate magnitude based on
 			// Ongoing tags being met. We either calculate magnitude one time, or its done via OnDirty calls (or potentially a frequency timer one day)
 
-			float EvaluatedMagnitude = Effect.Spec.GetModifierMagnitude(ModIdx, true);	// Note this could cause an attribute aggregator to be created, so must do this before calling/caching the Aggregator below!
+			float EvaluatedMagnitude = Effect.Spec.GetModifierMagnitude(ModIdx);	// Note this could cause an attribute aggregator to be created, so must do this before calling/caching the Aggregator below!
 
 			FAggregator* Aggregator = FindOrCreateAttributeAggregator(Effect.Spec.Def->Modifiers[ModIdx].Attribute).Get();
 			if (ensure(Aggregator))
@@ -4379,13 +4615,14 @@ void FActiveGameplayEffectsContainer::AddActiveGameplayEffectGrantedTagsAndModif
 	}
 	else
 	{
-		if (Effect.Spec.Def->PeriodicInhibitionPolicy != EGameplayEffectPeriodInhibitionRemovedPolicy::NeverReset && Owner && Owner->IsOwnerActorAuthoritative())
+		if (Effect.Spec.Def->PeriodicInhibitionPolicy != EGameplayEffectPeriodInhibitionRemovedPolicy::NeverReset && Owner->IsOwnerActorAuthoritative())
 		{
+			FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::ExecutePeriodicEffect, Effect.Handle);
+
 			// TurnBased Support
 			if(!Owner->IsTurnBased())
 			{
 				FTimerManager& TimerManager = Owner->GetWorld()->GetTimerManager();
-				FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::ExecutePeriodicEffect, Effect.Handle);
 
 				// The timer manager moves things from the pending list to the active list after checking the active list on the first tick so we need to execute here
 				if (Effect.Spec.Def->PeriodicInhibitionPolicy == EGameplayEffectPeriodInhibitionRemovedPolicy::ExecuteAndResetPeriod)
@@ -4398,7 +4635,6 @@ void FActiveGameplayEffectsContainer::AddActiveGameplayEffectGrantedTagsAndModif
 			else
 			{
 				FAbilityTimerManager& AbilityTimerManager = UAbilitySystemGlobals::Get().GetAbilityTimerManager();
-				FTimerDelegate Delegate = FTimerDelegate::CreateUObject(Owner, &UAbilitySystemComponent::ExecutePeriodicEffect, Effect.Handle);
 
 				// The timer manager moves things from the pending list to the active list after checking the active list on the first tick so we need to execute here
 				if (Effect.Spec.Def->PeriodicInhibitionPolicy == EGameplayEffectPeriodInhibitionRemovedPolicy::ExecuteAndResetPeriod)
@@ -4412,21 +4648,17 @@ void FActiveGameplayEffectsContainer::AddActiveGameplayEffectGrantedTagsAndModif
 		}
 	}
 
-
-	// Update our owner with the tags this GameplayEffect grants them
-	Owner->UpdateTagMap(Effect.Spec.Def->GetGrantedTags(), 1);
-	Owner->UpdateTagMap(Effect.Spec.DynamicGrantedTags, 1);
-
+	const bool bIrisWithoutTagCountSerializer = UE::Net::ShouldUseIrisReplication() && !CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread();
+	// Local application should be responsible for applying tags
+	if (!Effect.bPostPredictObject || bIrisWithoutTagCountSerializer)
+	{
+		// Update our owner with the tags this GameplayEffect grants them
+		Owner->UpdateTagMap(Effect.Spec.Def->GetGrantedTags(), 1, bIrisWithoutTagCountSerializer ? EGameplayTagReplicationState::TagOnly : EGameplayTagReplicationState::CountToOwner);
+		Owner->UpdateTagMap(Effect.Spec.DynamicGrantedTags, 1, bIrisWithoutTagCountSerializer ? EGameplayTagReplicationState::TagOnly : EGameplayTagReplicationState::CountToOwner);
+	}
+	
 	// Update our owner with the blocked ability tags this GameplayEffect adds to them
 	Owner->BlockAbilitiesWithTags(Effect.Spec.Def->GetBlockedAbilityTags());
-
-
-	// Update minimal replication if needed.
-	if (ShouldUseMinimalReplication())
-	{
-		Owner->AddMinimalReplicationGameplayTags(Effect.Spec.Def->GetGrantedTags());
-		Owner->AddMinimalReplicationGameplayTags(Effect.Spec.DynamicGrantedTags);
-	}
 
 PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	// Grant abilities
@@ -4471,7 +4703,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			else // ActiveGameplayEffects are replicating to everyone (this path can also execute on client)
 			{
 				// Do a pseudo-AddGameplayCue (but don't add to ActiveGameplayCues so it doesn't replicate in addition to the AGE we're replicating).
-				Owner->UpdateTagMap(Cue.GameplayCueTags, 1);
+				Owner->UpdateTagMap(Cue.GameplayCueTags, 1, EGameplayTagReplicationState::None);
 
 				if (bInvokeGameplayCueEvents)
 				{
@@ -4486,8 +4718,8 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	Owner->OnActiveGameplayEffectAddedDelegateToSelf.Broadcast(Owner, Effect.Spec, Effect.Handle);
 }
 
-/** Called on server to remove a GameplayEffect */
-bool FActiveGameplayEffectsContainer::RemoveActiveGameplayEffect(FActiveGameplayEffectHandle Handle, int32 StacksToRemove)
+/** Called on server to remove a GameplayEffect and on owning client for Post-Prediction cleanup */
+bool FActiveGameplayEffectsContainer::RemoveActiveGameplayEffect(FActiveGameplayEffectHandle Handle, int32 StacksToRemove, bool bPredictionRejected)
 {
 	// Iterating through manually since this is a removal operation and we need to pass the index into InternalRemoveActiveGameplayEffect
 	int32 NumGameplayEffects = GetNumGameplayEffects();
@@ -4496,7 +4728,7 @@ bool FActiveGameplayEffectsContainer::RemoveActiveGameplayEffect(FActiveGameplay
 		FActiveGameplayEffect& Effect = *GetActiveGameplayEffect(ActiveGEIdx);
 		if (Effect.Handle == Handle && Effect.IsPendingRemove == false)
 		{
-			InternalRemoveActiveGameplayEffect(ActiveGEIdx, StacksToRemove, true);
+			InternalRemoveActiveGameplayEffect(ActiveGEIdx, StacksToRemove, true, bPredictionRejected);
 			return true;
 		}
 	}
@@ -4540,7 +4772,7 @@ void FActiveGameplayEffectsContainer::InternalExecutePeriodicGameplayEffect(FAct
 }
 
 /** Called by server to actually remove a GameplayEffect */
-bool FActiveGameplayEffectsContainer::InternalRemoveActiveGameplayEffect(int32 Idx, int32 StacksToRemove, bool bPrematureRemoval)
+bool FActiveGameplayEffectsContainer::InternalRemoveActiveGameplayEffect(int32 Idx, int32 StacksToRemove, bool bPrematureRemoval, bool bPredictionRejected)
 {
 	SCOPE_CYCLE_COUNTER(STAT_RemoveActiveGameplayEffect);
 
@@ -4573,6 +4805,7 @@ bool FActiveGameplayEffectsContainer::InternalRemoveActiveGameplayEffect(int32 I
 		GameplayEffectRemovalInfo.ActiveEffect = &Effect;
 		GameplayEffectRemovalInfo.StackCount = Effect.Spec.GetStackCount();
 		GameplayEffectRemovalInfo.bPrematureRemoval = bPrematureRemoval;
+		GameplayEffectRemovalInfo.bPredictionRejected = bPredictionRejected;
 		GameplayEffectRemovalInfo.EffectContext = Effect.Spec.GetEffectContext();
 
 		if (StacksToRemove > 0 && Effect.Spec.GetStackCount() > StacksToRemove)
@@ -4624,9 +4857,6 @@ bool FActiveGameplayEffectsContainer::InternalRemoveActiveGameplayEffect(int32 I
 			}
 		}
 
-		// Remove this handle from the global map
-		Effect.Handle.RemoveFromGlobalMap();
-
 		bool ModifiedArray = false;
 
 		// Finally remove the ActiveGameplayEffect
@@ -4640,6 +4870,9 @@ bool FActiveGameplayEffectsContainer::InternalRemoveActiveGameplayEffect(int32 I
 		else
 		{
 			// Not locked, so do the removal right away.
+
+			// Remove this handle from the global map
+			Effect.Handle.RemoveFromGlobalMap();
 
 			// If we are not scope locked, then there is no way this idx should be referring to something on the pending add list.
 			// It is possible to remove a GE that is pending add, but it would happen while the scope lock is still in effect, resulting
@@ -4678,7 +4911,7 @@ void FActiveGameplayEffectsContainer::InternalOnActiveGameplayEffectRemoved(FAct
 		// Only Need to update tags and modifiers if the gameplay effect is active.
 		if (!Effect.bIsInhibited)
 		{
-			RemoveActiveGameplayEffectGrantedTagsAndModifiers(Effect, bInvokeGameplayCueEvents);
+			RemoveActiveGameplayEffectGrantedTagsAndModifiers(Effect, bInvokeGameplayCueEvents, GameplayEffectRemovalInfo.bPredictionRejected);
 		}
 
 		RemoveCustomMagnitudeExternalDependencies(Effect);
@@ -4693,7 +4926,7 @@ void FActiveGameplayEffectsContainer::InternalOnActiveGameplayEffectRemoved(FAct
 	OnActiveGameplayEffectRemovedDelegate.Broadcast(Effect);
 }
 
-void FActiveGameplayEffectsContainer::RemoveActiveGameplayEffectGrantedTagsAndModifiers(const FActiveGameplayEffect& Effect, bool bInvokeGameplayCueEvents)
+void FActiveGameplayEffectsContainer::RemoveActiveGameplayEffectGrantedTagsAndModifiers(const FActiveGameplayEffect& Effect, bool bInvokeGameplayCueEvents, bool bPredictionRejected)
 {
 	// Update AttributeAggregators: remove mods from this ActiveGE Handle
 	if (Effect.Spec.GetPeriod() <= UGameplayEffect::NO_PERIOD)
@@ -4710,19 +4943,17 @@ void FActiveGameplayEffectsContainer::RemoveActiveGameplayEffectGrantedTagsAndMo
 		}
 	}
 
-	// Update gameplaytag count and broadcast delegate if we are at 0
-	Owner->UpdateTagMap(Effect.Spec.Def->GetGrantedTags(), -1);
-	Owner->UpdateTagMap(Effect.Spec.DynamicGrantedTags, -1);
+	const bool bIrisWithoutTagCountSerializer = UE::Net::ShouldUseIrisReplication() && !CVarReplicateTagCountContainerWithIris.GetValueOnAnyThread();
+	// We're no longer predicting for remove unless it was rejected, so let the server replication handle the tags.
+	if (IsNetAuthority() || bPredictionRejected || bIrisWithoutTagCountSerializer)
+	{
+		// Update gameplaytag count and broadcast delegate if we are at 0
+		Owner->UpdateTagMap(Effect.Spec.Def->GetGrantedTags(), -1, bIrisWithoutTagCountSerializer ? EGameplayTagReplicationState::TagOnly : EGameplayTagReplicationState::CountToOwner);
+		Owner->UpdateTagMap(Effect.Spec.DynamicGrantedTags, -1, bIrisWithoutTagCountSerializer ? EGameplayTagReplicationState::TagOnly : EGameplayTagReplicationState::CountToOwner);
+	}
 
 	// Update our owner with the blocked ability tags this GameplayEffect adds to them
 	Owner->UnBlockAbilitiesWithTags(Effect.Spec.Def->GetBlockedAbilityTags());
-
-	// Update minimal replication if needed.
-	if (ShouldUseMinimalReplication())
-	{
-		Owner->RemoveMinimalReplicationGameplayTags(Effect.Spec.Def->GetGrantedTags());
-		Owner->RemoveMinimalReplicationGameplayTags(Effect.Spec.DynamicGrantedTags);
-	}
 
 PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	// Cancel/remove granted abilities
@@ -4771,7 +5002,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			else
 			{
 				// Perform pseudo-RemoveCue (without affecting ActiveGameplayCues, as we were not inserted there - see AddActiveGameplayEffectGrantedTagsAndModifiers)
-				Owner->UpdateTagMap(Cue.GameplayCueTags, -1);
+				Owner->UpdateTagMap(Cue.GameplayCueTags, -1, EGameplayTagReplicationState::None);
 
 				if (bInvokeGameplayCueEvents)
 				{
@@ -4912,8 +5143,6 @@ void FActiveGameplayEffectsContainer::RestartActiveGameplayEffectDuration(FActiv
 	ActiveGameplayEffect.CachedStartServerWorldTime = ActiveGameplayEffect.StartServerWorldTime;
 	ActiveGameplayEffect.StartWorldTime = GetWorldTime();
 	MarkItemDirty(ActiveGameplayEffect);
-
-	OnDurationChange(ActiveGameplayEffect);
 }
 
 ELifetimeCondition FActiveGameplayEffectsContainer::GetReplicationCondition() const
@@ -5046,7 +5275,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 
 void FActiveGameplayEffectsContainer::Uninitialize()
 {
-	UWorld* World = Owner->GetWorld();
+	UWorld* World = IsValid(Owner) ? Owner->GetWorld() : nullptr;
 	for (FActiveGameplayEffect& CurEffect : this)
 	{
 		RemoveCustomMagnitudeExternalDependencies(CurEffect);
@@ -5069,8 +5298,16 @@ void FActiveGameplayEffectsContainer::Uninitialize()
 
 bool FActiveGameplayEffectsContainer::IsServerWorldTimeAvailable() const
 {
+	if (!IsValid(Owner))
+	{
+		return false;
+	}
+
 	UWorld* World = Owner->GetWorld();
-	check(World);
+	if (!World)
+	{
+		return false;
+	}
 
 	AGameStateBase* GameState = World->GetGameState();
 	return (GameState != nullptr);
@@ -5215,6 +5452,10 @@ void FActiveGameplayEffectsContainer::CheckDuration(FActiveGameplayEffectHandle 
 			if (RefreshStartTime)
 			{
 				RestartActiveGameplayEffectDuration(Effect);
+
+				// Since the GE will go through another iteration, broadcast OnDurationChange
+				// allowing game code to respond to the new start and end time.
+				OnDurationChange(Effect);
 			}
 
 			if (RefreshDurationTimer)
@@ -5271,6 +5512,10 @@ void FActiveGameplayEffectsContainer::CheckDuration(FActiveGameplayEffectHandle 
 			if (RefreshStartTime)
 			{
 				RestartActiveGameplayEffectDuration(Effect);
+
+				// Since the GE will go through another iteration, broadcast OnDurationChange
+				// allowing game code to respond to the new start and end time.
+				OnDurationChange(Effect);
 			}
 
 			if (RefreshDurationTimer)
@@ -6296,6 +6541,10 @@ void FActiveGameplayEffectsContainer::DecrementLock()
 			if (Effect.IsPendingRemove)
 			{
 				UE_LOG(LogGameplayEffects, Verbose, TEXT("%s: Finish PendingRemove: %s. Auth: %d"), *GetNameSafe(Owner->GetOwnerActor()), *Effect.GetDebugString(), IsNetAuthority());
+				
+				// Remove this handle from the global map
+				Effect.Handle.RemoveFromGlobalMap();
+
 				GameplayEffects_Internal.RemoveAtSwap(idx, EAllowShrinking::No);
 				ModifiedArray = true;
 				PendingRemoves--;

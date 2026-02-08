@@ -6,11 +6,13 @@
 #include "GameplayTagContainer.h"
 #include "GameplayEffectTypes.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 struct FGameplayEffectSpec;
 struct FAggregator;
 
 /** Data that is used in aggregator evaluation that is passed from the caller/game code */
-struct GAMEPLAYABILITIES_API FAggregatorEvaluateParameters
+struct FAggregatorEvaluateParameters
 {
 	FAggregatorEvaluateParameters()
 		: SourceTags(nullptr)
@@ -36,7 +38,7 @@ struct GAMEPLAYABILITIES_API FAggregatorEvaluateParameters
 };
 
 /** Data that is used in aggregator evaluation that is intrinsic to the aggregator itself. Not passed in from the game code (though maybe originally setup once by the game code)   */
-struct GAMEPLAYABILITIES_API FAggregatorEvaluateMetaData
+struct FAggregatorEvaluateMetaData
 {
 	typedef TFunction< void(const FAggregatorEvaluateParameters&, const FAggregator*) > FCustomQualifiesFunc;
 
@@ -50,7 +52,7 @@ struct GAMEPLAYABILITIES_API FAggregatorEvaluateMetaData
 	FCustomQualifiesFunc CustomQualifiesFunc;
 };
 
-struct GAMEPLAYABILITIES_API FAggregatorMod
+struct FAggregatorMod
 {
 	const FGameplayTagRequirements*	SourceTagReqs;
 	const FGameplayTagRequirements*	TargetTagReqs;
@@ -64,7 +66,7 @@ struct GAMEPLAYABILITIES_API FAggregatorMod
 	bool Qualifies() const { return IsQualified; }
 
 	/** Called to update the Qualifies bool */
-	void UpdateQualifies(const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API void UpdateQualifies(const FAggregatorEvaluateParameters& Parameters) const;
 
 	/** Intended to be used by FAggregatorEvaluateMetaData::CustomQualifiesFunc to toggle qualifications of mods */
 	void SetExplicitQualifies(bool NewQualifies) const { IsQualified = NewQualifies; }
@@ -75,7 +77,7 @@ private:
 	mutable bool IsQualified;
 };
 
-struct GAMEPLAYABILITIES_API FAggregatorModInfo
+struct FAggregatorModInfo
 {
 	EGameplayModEvaluationChannel Channel;
 	EGameplayModOp::Type Op;
@@ -83,7 +85,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModInfo
 };
 
 /** Struct representing an individual aggregation channel/depth. Contains mods of all mod op types. */
-struct GAMEPLAYABILITIES_API FAggregatorModChannel
+struct FAggregatorModChannel
 {
 	/**
 	 * Evaluates the channel's mods with the specified base value and evaluation parameters
@@ -93,7 +95,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannel
 	 * 
 	 * @return Evaluated value based upon the channel's mods
 	 */
-	float EvaluateWithBase(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API float EvaluateWithBase(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters) const;
 
 	/**
 	 * Evaluates a final value in reverse, attempting to determine a base value from the modifiers within the channel.
@@ -108,7 +110,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannel
 	 * 
 	 * @return True if the reverse evaluation was successful, false if it was not
 	 */
-	bool ReverseEvaluate(float FinalValue, const FAggregatorEvaluateParameters& Parameters, OUT float& ComputedValue) const;
+	UE_API bool ReverseEvaluate(float FinalValue, const FAggregatorEvaluateParameters& Parameters, OUT float& ComputedValue) const;
 	
 	/**
 	 * Add a modifier to the channel
@@ -120,27 +122,27 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannel
 	 * @param bIsPredicted			Whether the mod is predicted or not
 	 * @param ActiveHandle			Handle of the active gameplay effect that's applying the mod
 	 */
-	void AddMod(float EvaluatedMagnitude, TEnumAsByte<EGameplayModOp::Type> ModOp, const FGameplayTagRequirements* SourceTagReqs, const FGameplayTagRequirements* TargetTagReqs, bool bIsPredicted, const FActiveGameplayEffectHandle& ActiveHandle);
+	UE_API void AddMod(float EvaluatedMagnitude, TEnumAsByte<EGameplayModOp::Type> ModOp, const FGameplayTagRequirements* SourceTagReqs, const FGameplayTagRequirements* TargetTagReqs, bool bIsPredicted, const FActiveGameplayEffectHandle& ActiveHandle);
 	
 	/**
 	 * Remove all mods from the channel that match the specified gameplay effect handle
 	 * 
 	 * @param Handle	Handle to use for removal
 	 */
-	void RemoveModsWithActiveHandle(const FActiveGameplayEffectHandle& Handle);
+	UE_API void RemoveModsWithActiveHandle(const FActiveGameplayEffectHandle& Handle);
 
 	/**
 	 * Add the specified channel's mods into this channel
 	 * 
 	 * @param Other	Other channel to add mods from
 	 */
-	void AddModsFrom(const FAggregatorModChannel& Other);
+	UE_API void AddModsFrom(const FAggregatorModChannel& Other);
 
 	/** runs UpdateQualifies on all mods */
-	void UpdateQualifiesOnAllMods(const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API void UpdateQualifiesOnAllMods(const FAggregatorEvaluateParameters& Parameters) const;
 
 	/** Helper function for iterating through all mods within a channel */
-	void ForEachMod(FAggregatorModInfo& Info, TFunction<void (const FAggregatorModInfo&) > Func) const;
+	UE_API void ForEachMod(FAggregatorModInfo& Info, TFunction<void (const FAggregatorModInfo&) > Func) const;
 
 	/**
 	 * Populate a mapping of channel to corresponding mods
@@ -148,7 +150,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannel
 	 * @param Channel	Enum channel associated with this channel
 	 * @param OutMods	Mapping of channel enum to mods
 	 */
-	void GetAllAggregatorMods(EGameplayModEvaluationChannel Channel, OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutMods) const;
+	UE_API void GetAllAggregatorMods(EGameplayModEvaluationChannel Channel, OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutMods) const;
 
 	/**
 	 * Called when the mod channel's gameplay effect dependencies have potentially been swapped out for new ones, like when GE arrays are cloned.
@@ -156,7 +158,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannel
 	 * 
 	 * @param SwappedDependencies	Mapping of old gameplay effect handles to new replacements
 	 */
-	void OnActiveEffectDependenciesSwapped(const TMap<FActiveGameplayEffectHandle, FActiveGameplayEffectHandle>& SwappedDependencies);
+	UE_API void OnActiveEffectDependenciesSwapped(const TMap<FActiveGameplayEffectHandle, FActiveGameplayEffectHandle>& SwappedDependencies);
 
 	/**
 	 * Helper function to sum all of the mods in the specified array, using the specified modifier bias and evaluation parameters
@@ -167,7 +169,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannel
 	 * 
 	 * @return Summed value of mods
 	 */
-	static float SumMods(const TArray<FAggregatorMod>& InMods, float Bias, const FAggregatorEvaluateParameters& Parameters);
+	static UE_API float SumMods(const TArray<FAggregatorMod>& InMods, float Bias, const FAggregatorEvaluateParameters& Parameters);
 
 private:
 
@@ -176,7 +178,7 @@ private:
 };
 
 /** Struct representing a container of modifier channels */
-struct GAMEPLAYABILITIES_API FAggregatorModChannelContainer
+struct FAggregatorModChannelContainer
 {
 	/**
 	 * Find or add a modifier channel for the specified enum value
@@ -185,10 +187,10 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannelContainer
 	 * 
 	 * @return Modifier channel for the specified enum value
 	 */
-	FAggregatorModChannel& FindOrAddModChannel(EGameplayModEvaluationChannel Channel);
+	UE_API FAggregatorModChannel& FindOrAddModChannel(EGameplayModEvaluationChannel Channel);
 
 	/** Simple accessor to the current number of modifier channels active */
-	int32 GetNumChannels() const;
+	UE_API int32 GetNumChannels() const;
 
 	/**
 	 * Evaluates the result of the specified base value run through each existing evaluation channel's modifiers in numeric order
@@ -202,7 +204,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannelContainer
 	 * 
 	 * @return Result of the specified base value run through each modifier in each evaluation channel in numeric order
 	 */
-	float EvaluateWithBase(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API float EvaluateWithBase(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters) const;
 
 	/**
 	 * Similar to EvaluateWithBase (see comment there for details), but terminates early after evaluating the specified final channel instead of
@@ -214,7 +216,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannelContainer
 	 * 
 	 * @return Result of the specified base value run through each modifier in each evaluation channel in numeric order
 	 */
-	float EvaluateWithBaseToChannel(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters, EGameplayModEvaluationChannel FinalChannel) const;
+	UE_API float EvaluateWithBaseToChannel(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters, EGameplayModEvaluationChannel FinalChannel) const;
 
 	/**
 	 * Evaluates a final value in reverse, attempting to determine a base value from the modifiers within all of the channels.
@@ -230,34 +232,34 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannelContainer
 	 * 
 	 * @return If possible, the base value from the reverse evaluation. If not possible, the original final value is returned.
 	 */
-	float ReverseEvaluate(float FinalValue, const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API float ReverseEvaluate(float FinalValue, const FAggregatorEvaluateParameters& Parameters) const;
 
 	/** Calls ::UpdateQualifies on each mod */
-	void EvaluateQualificationForAllMods(const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API void EvaluateQualificationForAllMods(const FAggregatorEvaluateParameters& Parameters) const;
 
 	/**
 	 * Removes any mods from every channel matching the specified handle
 	 * 
 	 * @param ActiveHandle	Handle to use for removal
 	 */
-	void RemoveAggregatorMod(const FActiveGameplayEffectHandle& ActiveHandle);
+	UE_API void RemoveAggregatorMod(const FActiveGameplayEffectHandle& ActiveHandle);
 
 	/**
 	 * Adds the mods from specified container to this one
 	 * 
 	 * @param Other	Container to add mods from
 	 */
-	void AddModsFrom(const FAggregatorModChannelContainer& Other);
+	UE_API void AddModsFrom(const FAggregatorModChannelContainer& Other);
 
 	/** Helper function for iterating through all mods within the channel container */
-	void ForEachMod( TFunction<void (const FAggregatorModInfo&) > ) const;
+	UE_API void ForEachMod( TFunction<void (const FAggregatorModInfo&) > ) const;
 
 	/**
 	 * Populate a mapping of channel to corresponding mods for debugging purposes
 	 * 
 	 * @param OutMods	Mapping of channel enum to mods
 	 */
-	void GetAllAggregatorMods(OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutMods) const;
+	UE_API void GetAllAggregatorMods(OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutMods) const;
 
 	/**
 	 * Called when the container's gameplay effect dependencies have potentially been swapped out for new ones, like when GE arrays are cloned.
@@ -265,7 +267,7 @@ struct GAMEPLAYABILITIES_API FAggregatorModChannelContainer
 	 * 
 	 * @param SwappedDependencies	Mapping of old gameplay effect handles to new replacements
 	 */
-	void OnActiveEffectDependenciesSwapped(const TMap<FActiveGameplayEffectHandle, FActiveGameplayEffectHandle>& SwappedDependencies);
+	UE_API void OnActiveEffectDependenciesSwapped(const TMap<FActiveGameplayEffectHandle, FActiveGameplayEffectHandle>& SwappedDependencies);
 
 private:
 
@@ -273,7 +275,7 @@ private:
 	TMap<EGameplayModEvaluationChannel, FAggregatorModChannel> ModChannelsMap;
 };
 
-struct GAMEPLAYABILITIES_API FAggregator : public TSharedFromThis<FAggregator>
+struct FAggregator : public TSharedFromThis<FAggregator>
 {
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnAggregatorDirty, FAggregator*);
 
@@ -284,60 +286,60 @@ struct GAMEPLAYABILITIES_API FAggregator : public TSharedFromThis<FAggregator>
 		, BroadcastingDirtyCount(0)
 	{}
 	
-	~FAggregator();
+	UE_API ~FAggregator();
 
 	/** Simple accessor to base value */
-	float GetBaseValue() const;
-	void SetBaseValue(float NewBaseValue, bool BroadcastDirtyEvent = true);
+	UE_API float GetBaseValue() const;
+	UE_API void SetBaseValue(float NewBaseValue, bool BroadcastDirtyEvent = true);
 	
-	void ExecModOnBaseValue(TEnumAsByte<EGameplayModOp::Type> ModifierOp, float EvaluatedMagnitude);
-	static float StaticExecModOnBaseValue(float BaseValue, TEnumAsByte<EGameplayModOp::Type> ModifierOp, float EvaluatedMagnitude);
+	UE_API void ExecModOnBaseValue(TEnumAsByte<EGameplayModOp::Type> ModifierOp, float EvaluatedMagnitude);
+	static UE_API float StaticExecModOnBaseValue(float BaseValue, TEnumAsByte<EGameplayModOp::Type> ModifierOp, float EvaluatedMagnitude);
 
-	void AddAggregatorMod(float EvaluatedData, TEnumAsByte<EGameplayModOp::Type> ModifierOp, EGameplayModEvaluationChannel ModifierChannel, const FGameplayTagRequirements*	SourceTagReqs, const FGameplayTagRequirements* TargetTagReqs, bool IsPredicted, FActiveGameplayEffectHandle ActiveHandle = FActiveGameplayEffectHandle() );
+	UE_API void AddAggregatorMod(float EvaluatedData, TEnumAsByte<EGameplayModOp::Type> ModifierOp, EGameplayModEvaluationChannel ModifierChannel, const FGameplayTagRequirements*	SourceTagReqs, const FGameplayTagRequirements* TargetTagReqs, bool IsPredicted, FActiveGameplayEffectHandle ActiveHandle = FActiveGameplayEffectHandle() );
 
 	/** Removes all mods for the passed in handle and marks this as dirty to recalculate the aggregator */
-	void RemoveAggregatorMod(FActiveGameplayEffectHandle ActiveHandle);
+	UE_API void RemoveAggregatorMod(FActiveGameplayEffectHandle ActiveHandle);
 
 	/** Updates the aggregators for the past in handle, this will handle it so the UAttributeSets stats only get one update for the delta change */
-	void UpdateAggregatorMod(FActiveGameplayEffectHandle ActiveHandle, const FGameplayAttribute& Attribute, const FGameplayEffectSpec& Spec, bool bWasLocallyGenerated, FActiveGameplayEffectHandle InHandle);
+	UE_API void UpdateAggregatorMod(FActiveGameplayEffectHandle ActiveHandle, const FGameplayAttribute& Attribute, const FGameplayEffectSpec& Spec, bool bWasLocallyGenerated, FActiveGameplayEffectHandle InHandle);
 
 	/** Evaluates the Aggregator with the internal base value and given parameters */
-	float Evaluate(const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API float Evaluate(const FAggregatorEvaluateParameters& Parameters) const;
 
 	/** Evaluates the aggregator with the internal base value and given parameters, up to the specified evaluation channel (inclusive) */
-	float EvaluateToChannel(const FAggregatorEvaluateParameters& Parameters, EGameplayModEvaluationChannel FinalChannel) const;
+	UE_API float EvaluateToChannel(const FAggregatorEvaluateParameters& Parameters, EGameplayModEvaluationChannel FinalChannel) const;
 
 	/** Works backwards to calculate the base value. Used on clients for doing predictive modifiers */
-	float ReverseEvaluate(float FinalValue, const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API float ReverseEvaluate(float FinalValue, const FAggregatorEvaluateParameters& Parameters) const;
 
 	/** Evaluates the Aggregator with an arbitrary base value */
-	float EvaluateWithBase(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API float EvaluateWithBase(float InlineBaseValue, const FAggregatorEvaluateParameters& Parameters) const;
 
 	/** Evaluates the Aggregator to compute its "bonus" (final - base) value */
-	float EvaluateBonus(const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API float EvaluateBonus(const FAggregatorEvaluateParameters& Parameters) const;
 
 	/** Evaluates the contribution from the GE associated with ActiveHandle */
-	float EvaluateContribution(const FAggregatorEvaluateParameters& Parameters, FActiveGameplayEffectHandle ActiveHandle) const;
+	UE_API float EvaluateContribution(const FAggregatorEvaluateParameters& Parameters, FActiveGameplayEffectHandle ActiveHandle) const;
 
 	/** Calls ::UpdateQualifies on each mod. Useful for when you need to manually inspect aggregators */
-	void EvaluateQualificationForAllMods(const FAggregatorEvaluateParameters& Parameters) const;
+	UE_API void EvaluateQualificationForAllMods(const FAggregatorEvaluateParameters& Parameters) const;
 
-	void TakeSnapshotOf(const FAggregator& AggToSnapshot);
+	UE_API void TakeSnapshotOf(const FAggregator& AggToSnapshot);
 
 	FOnAggregatorDirty OnDirty;
 	FOnAggregatorDirty OnDirtyRecursive;	// Called in case where we are in a recursive dirtying chain. This will force the backing uproperty to update but not call the game code delegates
 
-	void AddModsFrom(const FAggregator& SourceAggregator);
+	UE_API void AddModsFrom(const FAggregator& SourceAggregator);
 
-	void AddDependent(FActiveGameplayEffectHandle Handle);
-	void RemoveDependent(FActiveGameplayEffectHandle Handle);
+	UE_API void AddDependent(FActiveGameplayEffectHandle Handle);
+	UE_API void RemoveDependent(FActiveGameplayEffectHandle Handle);
 
 	/**
 	 * Populate a mapping of channel to corresponding mods
 	 * 
 	 * @param OutMods	Mapping of channel enum to mods
 	 */
-	void GetAllAggregatorMods(OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutMods) const;
+	UE_API void GetAllAggregatorMods(OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutMods) const;
 
 	/**
 	 * Called when the aggregator's gameplay effect dependencies have potentially been swapped out for new ones, like when GE arrays are cloned.
@@ -345,10 +347,10 @@ struct GAMEPLAYABILITIES_API FAggregator : public TSharedFromThis<FAggregator>
 	 * 
 	 * @param SwappedDependencies	Mapping of old gameplay effect handles to new replacements
 	 */
-	void OnActiveEffectDependenciesSwapped(const TMap<FActiveGameplayEffectHandle, FActiveGameplayEffectHandle>& SwappedDependencies);
+	UE_API void OnActiveEffectDependenciesSwapped(const TMap<FActiveGameplayEffectHandle, FActiveGameplayEffectHandle>& SwappedDependencies);
 
 	/** Helper function for iterating through all mods within the aggregator */
-	void ForEachMod( TFunction<void (const FAggregatorModInfo&) > ) const;
+	UE_API void ForEachMod( TFunction<void (const FAggregatorModInfo&) > ) const;
 
 	/** Custom meta data for the aggregator */
 	FAggregatorEvaluateMetaData* EvaluationMetaData;
@@ -358,7 +360,7 @@ struct GAMEPLAYABILITIES_API FAggregator : public TSharedFromThis<FAggregator>
 
 private:
 
-	void BroadcastOnDirty();
+	UE_API void BroadcastOnDirty();
 
 	float	BaseValue;
 	FAggregatorModChannelContainer ModChannels;
@@ -373,7 +375,7 @@ private:
 	friend class UAbilitySystemComponent;	// Only needed for DisplayDebug()
 };
 
-struct GAMEPLAYABILITIES_API FAggregatorRef
+struct FAggregatorRef
 {
 	FAggregatorRef() { }
 	FAggregatorRef(FAggregator* InData) : Data(InData) { }
@@ -382,7 +384,7 @@ struct GAMEPLAYABILITIES_API FAggregatorRef
 
 	TSharedPtr<FAggregator>	Data;
 
-	void TakeSnapshotOf(const FAggregatorRef& RefToSnapshot);
+	UE_API void TakeSnapshotOf(const FAggregatorRef& RefToSnapshot);
 };
 
 /**
@@ -392,22 +394,24 @@ struct GAMEPLAYABILITIES_API FAggregatorRef
  *	The only catch is that we store raw FAggregator*. This should only be used in scopes where aggreagtors
  *	are not deleted. There is currently no place that does. If we find to, we could add additional safety checks.
  */
-struct GAMEPLAYABILITIES_API FScopedAggregatorOnDirtyBatch
+struct FScopedAggregatorOnDirtyBatch
 {
-	FScopedAggregatorOnDirtyBatch();
-	~FScopedAggregatorOnDirtyBatch();
+	UE_API FScopedAggregatorOnDirtyBatch();
+	UE_API ~FScopedAggregatorOnDirtyBatch();
 
-	static void BeginLock();
-	static void EndLock();
+	static UE_API void BeginLock();
+	static UE_API void EndLock();
 
-	static void BeginNetReceiveLock();
-	static void EndNetReceiveLock();
+	static UE_API void BeginNetReceiveLock();
+	static UE_API void EndNetReceiveLock();
 
-	static int32	GlobalBatchCount;
-	static TSet<FAggregator*>	DirtyAggregators;
+	static UE_API int32	GlobalBatchCount;
+	static UE_API TSet<FAggregator*>	DirtyAggregators;
 
-	static bool		GlobalFromNetworkUpdate;
-	static int32	NetUpdateID;
+	static UE_API bool		GlobalFromNetworkUpdate;
+	static UE_API int32	NetUpdateID;
 };
 
 #define AGGREGATOR_BATCH_SCOPE() FScopedAggregatorOnDirtyBatch AggregatorOnDirtyBatcher;
+
+#undef UE_API

@@ -7,6 +7,20 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(AbilityAsync_WaitGameplayTagQuery)
 
+UAbilityAsync_WaitGameplayTagQuery* UAbilityAsync_WaitGameplayTagQuery::WaitGameplayTagQueryOnActor(AActor* TargetActor,
+	const FGameplayTagQuery TagQuery,
+	const EWaitGameplayTagQueryTriggerCondition TriggerCondition /*= EWaitGameplayTagQueryTriggerCondition::WhenTrue*/,
+	const bool bOnlyTriggerOnce/*=false*/)
+{
+	UAbilityAsync_WaitGameplayTagQuery* MyObj = NewObject<UAbilityAsync_WaitGameplayTagQuery>();
+	MyObj->SetAbilityActor(TargetActor);
+	MyObj->TagQuery = TagQuery;
+	MyObj->TriggerCondition = TriggerCondition;
+	MyObj->bOnlyTriggerOnce = bOnlyTriggerOnce;
+
+	return MyObj;
+}
+
 void UAbilityAsync_WaitGameplayTagQuery::Activate()
 {
 	Super::Activate();
@@ -120,18 +134,3 @@ void UAbilityAsync_WaitGameplayTagQuery::EvaluateTagQuery()
 		}
 	}
 }
-
-UAbilityAsync_WaitGameplayTagQuery* UAbilityAsync_WaitGameplayTagQuery::WaitGameplayTagQueryOnActor(AActor* TargetActor, 
-																									const FGameplayTagQuery TagQuery, 
-																									const EWaitGameplayTagQueryTriggerCondition TriggerCondition /*= EWaitGameplayTagQueryTriggerCondition::WhenTrue*/, 
-																									const bool bOnlyTriggerOnce/*=false*/)
-{
-	UAbilityAsync_WaitGameplayTagQuery* MyObj = NewObject<UAbilityAsync_WaitGameplayTagQuery>();
-	MyObj->SetAbilityActor(TargetActor);
-	MyObj->TagQuery = TagQuery;
-	MyObj->TriggerCondition = TriggerCondition;
-	MyObj->bOnlyTriggerOnce = bOnlyTriggerOnce;
-
-	return MyObj;
-}
-

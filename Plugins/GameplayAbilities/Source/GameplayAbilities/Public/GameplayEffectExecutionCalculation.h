@@ -12,39 +12,41 @@
 #include "GameplayEffectCalculation.h"
 #include "GameplayEffectExecutionCalculation.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UAbilitySystemComponent;
 
 /** Struct representing parameters for a custom gameplay effect execution. Should not be held onto via reference, used just for the scope of the execution */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayEffectCustomExecutionParameters
+struct FGameplayEffectCustomExecutionParameters
 {
 	GENERATED_USTRUCT_BODY()
 
 public:
 
 	// Constructors
-	FGameplayEffectCustomExecutionParameters();
-	FGameplayEffectCustomExecutionParameters(FGameplayEffectSpec& InOwningSpec, const TArray<FGameplayEffectExecutionScopedModifierInfo>& InScopedMods, UAbilitySystemComponent* InTargetAbilityComponent, const FGameplayTagContainer& InPassedIntags, const FPredictionKey& InPredictionKey);
-	FGameplayEffectCustomExecutionParameters(FGameplayEffectSpec& InOwningSpec, const TArray<FGameplayEffectExecutionScopedModifierInfo>& InScopedMods, UAbilitySystemComponent* InTargetAbilityComponent, const FGameplayTagContainer& InPassedIntags, const FPredictionKey& InPredictionKey, const TArray<FActiveGameplayEffectHandle>& InIgnoreHandles);
+	UE_API FGameplayEffectCustomExecutionParameters();
+	UE_API FGameplayEffectCustomExecutionParameters(FGameplayEffectSpec& InOwningSpec, const TArray<FGameplayEffectExecutionScopedModifierInfo>& InScopedMods, UAbilitySystemComponent* InTargetAbilityComponent, const FGameplayTagContainer& InPassedIntags, const FPredictionKey& InPredictionKey);
+	UE_API FGameplayEffectCustomExecutionParameters(FGameplayEffectSpec& InOwningSpec, const TArray<FGameplayEffectExecutionScopedModifierInfo>& InScopedMods, UAbilitySystemComponent* InTargetAbilityComponent, const FGameplayTagContainer& InPassedIntags, const FPredictionKey& InPredictionKey, const TArray<FActiveGameplayEffectHandle>& InIgnoreHandles);
 
 	/** Simple accessor to owning gameplay spec */
-	const FGameplayEffectSpec& GetOwningSpec() const;
+	UE_API const FGameplayEffectSpec& GetOwningSpec() const;
 
 	/** Non const access. Be careful with this, especially when modifying a spec after attribute capture. */
-	FGameplayEffectSpec* GetOwningSpecForPreExecuteMod() const;
+	UE_API FGameplayEffectSpec* GetOwningSpecForPreExecuteMod() const;
 
 	/** Simple accessor to target ability system component */
-	UAbilitySystemComponent* GetTargetAbilitySystemComponent() const;
+	UE_API UAbilitySystemComponent* GetTargetAbilitySystemComponent() const;
 
 	/** Simple accessor to source ability system component (could be null!) */
-	UAbilitySystemComponent* GetSourceAbilitySystemComponent() const;
+	UE_API UAbilitySystemComponent* GetSourceAbilitySystemComponent() const;
 	
 	/** Simple accessor to the Passed In Tags to this execution */
-	const FGameplayTagContainer& GetPassedInTags() const;
+	UE_API const FGameplayTagContainer& GetPassedInTags() const;
 
-	TArray<FActiveGameplayEffectHandle> GetIgnoreHandles() const;
+	UE_API TArray<FActiveGameplayEffectHandle> GetIgnoreHandles() const;
 	
-	FPredictionKey GetPredictionKey() const;
+	UE_API FPredictionKey GetPredictionKey() const;
 
 	/**
 	 * Attempts to calculate the magnitude of a captured attribute given the specified parameters. Can fail if the gameplay spec doesn't have
@@ -56,7 +58,7 @@ public:
 	 * 
 	 * @return True if the magnitude was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateCapturedAttributeMagnitude(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutMagnitude) const;
+	UE_API bool AttemptCalculateCapturedAttributeMagnitude(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutMagnitude) const;
 	
 	/**
 	 * Attempts to calculate the magnitude of a captured attribute given the specified parameters, including a starting base value. 
@@ -69,7 +71,7 @@ public:
 	 * 
 	 * @return True if the magnitude was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateCapturedAttributeMagnitudeWithBase(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, float InBaseValue, OUT float& OutMagnitude) const;
+	UE_API bool AttemptCalculateCapturedAttributeMagnitudeWithBase(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, float InBaseValue, OUT float& OutMagnitude) const;
 
 	/**
 	 * Attempts to calculate the base value of a captured attribute given the specified parameters. Can fail if the gameplay spec doesn't have
@@ -80,7 +82,7 @@ public:
 	 * 
 	 * @return True if the base value was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateCapturedAttributeBaseValue(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, OUT float& OutBaseValue) const;
+	UE_API bool AttemptCalculateCapturedAttributeBaseValue(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, OUT float& OutBaseValue) const;
 
 	/**
 	 * Attempts to calculate the bonus magnitude of a captured attribute given the specified parameters. Can fail if the gameplay spec doesn't have
@@ -92,7 +94,7 @@ public:
 	 * 
 	 * @return True if the bonus magnitude was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateCapturedAttributeBonusMagnitude(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutBonusMagnitude) const;
+	UE_API bool AttemptCalculateCapturedAttributeBonusMagnitude(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutBonusMagnitude) const;
 	
 	/**
 	 * Attempts to populate the specified aggregator with a snapshot of a backing captured aggregator. Can fail if the gameplay spec doesn't have
@@ -103,7 +105,7 @@ public:
 	 * 
 	 * @return True if the aggregator was successfully snapshotted, false if it was not
 	 */
-	bool AttemptGetCapturedAttributeAggregatorSnapshot(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, OUT FAggregator& OutSnapshottedAggregator) const;
+	UE_API bool AttemptGetCapturedAttributeAggregatorSnapshot(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, OUT FAggregator& OutSnapshottedAggregator) const;
 
 	/** 
 	 *	Returns all modifiers for a given captured def. Note the returned list is a direct reference to the internal list stored in the attribute aggregators (possibly a snapshot copy or possibly the "real" ones).
@@ -112,10 +114,10 @@ public:
 	 *	
 	 *	Consider using ForEachQualifiedAttributeMod when you want to "do something for every qualifier mod".
 	 */
-	bool AttemptGatherAttributeMods(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutModMap) const;
+	UE_API bool AttemptGatherAttributeMods(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, OUT TMap<EGameplayModEvaluationChannel, const TArray<FAggregatorMod>*>& OutModMap) const;
 
 	/** Runs given TFunction on every qualifier mod for a given AttributeCaptureDefinition */
-	bool ForEachQualifiedAttributeMod(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, TFunction< void(EGameplayModEvaluationChannel, EGameplayModOp::Type, const FAggregatorMod&) >) const;
+	UE_API bool ForEachQualifiedAttributeMod(const FGameplayEffectAttributeCaptureDefinition& InCaptureDef, const FAggregatorEvaluateParameters& InEvalParams, TFunction< void(EGameplayModEvaluationChannel, EGameplayModOp::Type, const FAggregatorMod&) >) const;
 
 	/**
 	 * Attempts to calculate the magnitude of a transient aggregator given the specified parameters.
@@ -126,7 +128,7 @@ public:
 	 * 
 	 * @return True if the magnitude was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateTransientAggregatorMagnitude(const FGameplayTag& InAggregatorIdentifier, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutMagnitude) const;
+	UE_API bool AttemptCalculateTransientAggregatorMagnitude(const FGameplayTag& InAggregatorIdentifier, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutMagnitude) const;
 	
 	/**
 	 * Attempts to calculate the magnitude of a transient aggregator given the specified parameters, including a starting base value.
@@ -138,7 +140,7 @@ public:
 	 * 
 	 * @return True if the magnitude was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateTransientAggregatorMagnitudeWithBase(const FGameplayTag& InAggregatorIdentifier, const FAggregatorEvaluateParameters& InEvalParams, float InBaseValue, OUT float& OutMagnitude) const;
+	UE_API bool AttemptCalculateTransientAggregatorMagnitudeWithBase(const FGameplayTag& InAggregatorIdentifier, const FAggregatorEvaluateParameters& InEvalParams, float InBaseValue, OUT float& OutMagnitude) const;
 
 	/**
 	 * Attempts to calculate the base value of a transient aggregator given the specified parameters.
@@ -148,7 +150,7 @@ public:
 	 * 
 	 * @return True if the base value was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateTransientAggregatorBaseValue(const FGameplayTag& InAggregatorIdentifier, OUT float& OutBaseValue) const;
+	UE_API bool AttemptCalculateTransientAggregatorBaseValue(const FGameplayTag& InAggregatorIdentifier, OUT float& OutBaseValue) const;
 
 	/**
 	 * Attempts to calculate the bonus magnitude of a transient aggregator given the specified parameters.
@@ -159,7 +161,7 @@ public:
 	 * 
 	 * @return True if the bonus magnitude was successfully calculated, false if it was not
 	 */
-	bool AttemptCalculateTransientAggregatorBonusMagnitude(const FGameplayTag& InAggregatorIdentifier, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutBonusMagnitude) const;
+	UE_API bool AttemptCalculateTransientAggregatorBonusMagnitude(const FGameplayTag& InAggregatorIdentifier, const FAggregatorEvaluateParameters& InEvalParams, OUT float& OutBonusMagnitude) const;
 	
 	/**
 	 * Attempts to populate the specified aggregator with a snapshot of a backing transient aggregator. Can fail if the transient aggregator doesn't exist as a result
@@ -170,7 +172,7 @@ public:
 	 * 
 	 * @return True if the aggregator was successfully snapshotted, false if it was not
 	 */
-	bool AttemptGetCapturedAttributeAggregatorSnapshot(const FGameplayTag& InAggregatorIdentifier, OUT FAggregator& OutSnapshottedAggregator) const;
+	UE_API bool AttemptGetCapturedAttributeAggregatorSnapshot(const FGameplayTag& InAggregatorIdentifier, OUT FAggregator& OutSnapshottedAggregator) const;
 
 private:
 
@@ -196,41 +198,41 @@ private:
 
 /** Struct representing the output of a custom gameplay effect execution. */
 USTRUCT(BlueprintType)
-struct GAMEPLAYABILITIES_API FGameplayEffectCustomExecutionOutput
+struct FGameplayEffectCustomExecutionOutput
 {
 	GENERATED_USTRUCT_BODY()
 
 public:
 
 	/** Constructor */
-	FGameplayEffectCustomExecutionOutput();
+	UE_API FGameplayEffectCustomExecutionOutput();
 
 	/** Mark that the execution has manually handled the stack count and the GE system should not attempt to automatically act upon it for emitted modifiers */
-	void MarkStackCountHandledManually();
+	UE_API void MarkStackCountHandledManually();
 
 	/** Simple accessor for determining whether the execution has manually handled the stack count or not */
-	bool IsStackCountHandledManually() const;
+	UE_API bool IsStackCountHandledManually() const;
 
 	/** Accessor for determining if GameplayCue events have already been handled */
-	bool AreGameplayCuesHandledManually() const;
+	UE_API bool AreGameplayCuesHandledManually() const;
 
 	/** Mark that the execution wants conditional gameplay effects to trigger */
-	void MarkConditionalGameplayEffectsToTrigger();
+	UE_API void MarkConditionalGameplayEffectsToTrigger();
 
 	/** Mark that the execution wants conditional gameplay effects to trigger */
-	void MarkGameplayCuesHandledManually();
+	UE_API void MarkGameplayCuesHandledManually();
 
 	/** Simple accessor for determining whether the execution wants conditional gameplay effects to trigger or not */
-	bool ShouldTriggerConditionalGameplayEffects() const;
+	UE_API bool ShouldTriggerConditionalGameplayEffects() const;
 
 	/** Add the specified evaluated data to the execution's output modifiers */
-	void AddOutputModifier(const FGameplayModifierEvaluatedData& InOutputMod);
+	UE_API void AddOutputModifier(const FGameplayModifierEvaluatedData& InOutputMod);
 
 	/** Simple accessor to output modifiers of the execution */
-	const TArray<FGameplayModifierEvaluatedData>& GetOutputModifiers() const;
+	UE_API const TArray<FGameplayModifierEvaluatedData>& GetOutputModifiers() const;
 
 	/** Simple accessor to output modifiers of the execution */
-	void GetOutputModifiers(OUT TArray<FGameplayModifierEvaluatedData>& OutOutputModifiers) const;
+	UE_API void GetOutputModifiers(OUT TArray<FGameplayModifierEvaluatedData>& OutOutputModifiers) const;
 
 	/** Returns direct access to output modifiers of the execution (avoid copy) */
 	TArray<FGameplayModifierEvaluatedData>& GetOutputModifiersRef() { return OutputModifiers; }
@@ -254,8 +256,8 @@ private:
 	uint32 bHandledGameplayCuesManually : 1;
 };
 
-UCLASS(BlueprintType, Blueprintable, Abstract)
-class GAMEPLAYABILITIES_API UGameplayEffectExecutionCalculation : public UGameplayEffectCalculation
+UCLASS(BlueprintType, Blueprintable, Abstract, MinimalAPI)
+class UGameplayEffectExecutionCalculation : public UGameplayEffectCalculation
 {
 	GENERATED_UCLASS_BODY()
 
@@ -283,17 +285,17 @@ public:
 	 * 
 	 * @param OutScopableModifiers	[OUT] Array to populate with definitions valid as scoped modifiers
 	 */
-	virtual void GetValidScopedModifierAttributeCaptureDefinitions(OUT TArray<FGameplayEffectAttributeCaptureDefinition>& OutScopableModifiers) const;
+	UE_API virtual void GetValidScopedModifierAttributeCaptureDefinitions(OUT TArray<FGameplayEffectAttributeCaptureDefinition>& OutScopableModifiers) const;
 
 	/**
 	 * Gets the collection of identifiers of valid transient aggregators ("temporary variable aggregators")
 	 * 
 	 * @return Array of valid transient aggregator identifiers
 	 */
-	virtual const FGameplayTagContainer& GetValidTransientAggregatorIdentifiers() const;
+	UE_API virtual const FGameplayTagContainer& GetValidTransientAggregatorIdentifiers() const;
 
 	/** Returns if this execution requires passed in tags */
-	virtual bool DoesRequirePassedInTags() const;
+	UE_API virtual bool DoesRequirePassedInTags() const;
 
 #endif // #if WITH_EDITORONLY_DATA
 
@@ -309,7 +311,7 @@ public:
 	 * @param OutExecutionOutput	[OUT] Output data populated by the execution detailing further behavior or results of the execution
 	 */
 	UFUNCTION(BlueprintNativeEvent, Category="Calculation")
-	void Execute(const FGameplayEffectCustomExecutionParameters& ExecutionParams, FGameplayEffectCustomExecutionOutput& OutExecutionOutput) const;
+	UE_API void Execute(const FGameplayEffectCustomExecutionParameters& ExecutionParams, FGameplayEffectCustomExecutionOutput& OutExecutionOutput) const;
 };
 
 
@@ -327,3 +329,5 @@ public:
 	P##Property = FindFieldChecked<FProperty>(S::StaticClass(), GET_MEMBER_NAME_CHECKED(S, P)); \
 	P##Def = FGameplayEffectAttributeCaptureDefinition(P##Property, EGameplayEffectAttributeCaptureSource::T, B); \
 }
+
+#undef UE_API

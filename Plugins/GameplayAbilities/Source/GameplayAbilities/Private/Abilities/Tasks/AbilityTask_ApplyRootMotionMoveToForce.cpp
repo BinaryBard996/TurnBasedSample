@@ -51,7 +51,7 @@ void UAbilityTask_ApplyRootMotionMoveToForce::SharedInitAndApply()
 		StartTime = GetWorld()->GetTimeSeconds();
 		EndTime = StartTime + Duration;
 
-		if (MovementComponent)
+		if (MovementComponent.IsValid())
 		{
 			if (bSetNewMovementMode)
 			{
@@ -154,7 +154,7 @@ void UAbilityTask_ApplyRootMotionMoveToForce::PreDestroyFromReplication()
 
 void UAbilityTask_ApplyRootMotionMoveToForce::OnDestroy(bool AbilityIsEnding)
 {
-	if (MovementComponent)
+	if (MovementComponent.IsValid())
 	{
 		MovementComponent->RemoveRootMotionSourceByID(RootMotionSourceID);
 

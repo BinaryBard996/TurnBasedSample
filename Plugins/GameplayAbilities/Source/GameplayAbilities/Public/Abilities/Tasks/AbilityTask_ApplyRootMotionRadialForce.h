@@ -7,6 +7,8 @@
 #include "Abilities/Tasks/AbilityTask_ApplyRootMotion_Base.h"
 #include "AbilityTask_ApplyRootMotionRadialForce.generated.h"
 
+#define UE_API GAMEPLAYABILITIES_API
+
 class UCharacterMovementComponent;
 class UCurveFloat;
 class UGameplayTasksComponent;
@@ -19,8 +21,8 @@ class AActor;
 /**
  *	Applies force to character's movement
  */
-UCLASS()
-class GAMEPLAYABILITIES_API UAbilityTask_ApplyRootMotionRadialForce : public UAbilityTask_ApplyRootMotion_Base
+UCLASS(MinimalAPI)
+class UAbilityTask_ApplyRootMotionRadialForce : public UAbilityTask_ApplyRootMotion_Base
 {
 	GENERATED_UCLASS_BODY()
 
@@ -29,17 +31,17 @@ class GAMEPLAYABILITIES_API UAbilityTask_ApplyRootMotionRadialForce : public UAb
 
 	/** Apply force to character's movement */
 	UFUNCTION(BlueprintCallable, Category = "Ability|Tasks", meta = (HidePin = "OwningAbility", DefaultToSelf = "OwningAbility", BlueprintInternalUseOnly = "TRUE"))
-	static UAbilityTask_ApplyRootMotionRadialForce* ApplyRootMotionRadialForce(UGameplayAbility* OwningAbility, FName TaskInstanceName, FVector Location, AActor* LocationActor, float Strength, float Duration, float Radius, bool bIsPush, bool bIsAdditive, bool bNoZForce, UCurveFloat* StrengthDistanceFalloff, UCurveFloat* StrengthOverTime, bool bUseFixedWorldDirection, FRotator FixedWorldDirection, ERootMotionFinishVelocityMode VelocityOnFinishMode, FVector SetVelocityOnFinish, float ClampVelocityOnFinish);
+	static UE_API UAbilityTask_ApplyRootMotionRadialForce* ApplyRootMotionRadialForce(UGameplayAbility* OwningAbility, FName TaskInstanceName, FVector Location, AActor* LocationActor, float Strength, float Duration, float Radius, bool bIsPush, bool bIsAdditive, bool bNoZForce, UCurveFloat* StrengthDistanceFalloff, UCurveFloat* StrengthOverTime, bool bUseFixedWorldDirection, FRotator FixedWorldDirection, ERootMotionFinishVelocityMode VelocityOnFinishMode, FVector SetVelocityOnFinish, float ClampVelocityOnFinish);
 
 	/** Tick function for this task, if bTickingTask == true */
-	virtual void TickTask(float DeltaTime) override;
+	UE_API virtual void TickTask(float DeltaTime) override;
 
-	virtual void PreDestroyFromReplication() override;
-	virtual void OnDestroy(bool AbilityIsEnding) override;
+	UE_API virtual void PreDestroyFromReplication() override;
+	UE_API virtual void OnDestroy(bool AbilityIsEnding) override;
 
 protected:
 
-	virtual void SharedInitAndApply() override;
+	UE_API virtual void SharedInitAndApply() override;
 
 protected:
 
@@ -90,3 +92,5 @@ protected:
 	UPROPERTY(Replicated)
 	FRotator FixedWorldDirection;
 };
+
+#undef UE_API
